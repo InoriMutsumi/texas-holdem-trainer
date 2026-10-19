@@ -12,7 +12,9 @@ const html = fs.readFileSync(DIR + '/index.html', 'utf8');
 const gtoSrc = fs.readFileSync(DIR + '/gto-data.js', 'utf8');
 const ROUNDS = parseInt(process.argv[2] || '2', 10);
 const HANDS = parseInt(process.argv[3] || '300', 10);
-const LEVELS = ['easy', 'normal', 'hard'];
+// 可选第四个参数指定参赛档位，例如 `node bench.js 4 400 normal,hard`。
+// 三档混战时新手会一直送钱，把「熟练 vs 职业」的差距稀释掉，单挑两种难度信噪比更高。
+const LEVELS = (process.argv[4] || 'easy,normal,hard').split(',');
 const STACK = 2000;
 
 function extract(id) {
@@ -118,9 +120,9 @@ sandbox.PokerEngine.nextHand = function (g) {
   return r;
 };
 
-// 座位 0 当「跟注站」陪练：能跟就跟、能过就过，只有下注过重时才弃。
-// 这样它是一个稳定的「送钱机器」，三档的 BB/100 就等于「从一个跟注站身上榨钱的效率」——
-// 这正是德州里最考验价值下注和尺度控制的能力，比随机乱点稳定得多。
+// 座位 0 当「普通玩家」陪练：小注跟、大注倾向弃、偶尔诈唬。
+// 早先用的是纯跟注站，但跟注站从不弃牌，等于把「诈唬 / MDF / 范围追踪」三项能力全部废掉，
+// 测出来最强的永远是「紧 + 价值下注」。真人会弃牌，陪练也必须会弃，测试才有意义。
 function playAsHuman() {
   const box = elements['actionButtons'];
   if (!box) return false;
@@ -130,13 +132,19 @@ function playAsHuman() {
   const g = dbg().game;
   const me = g.players[0];
   const toCall = Math.max(0, (g.streetCurrentBet || 0) - (me.bet || 0));
+  const pot = Math.max(g.pot || 1, 1);
+  const ratio = toCall / pot;
   let b;
   if (toCall > 0) {
-    // 跟注站也会偶尔弃掉明显打不起的牌，避免每手都被打到全下
-    if (toCall > me.chips * 0.35 && Math.random() < 0.45) b = pick('弃牌');
+    if (me.chips <= toCall) b = pick('跟注') || pick('全下');
+    else if (ratio > 0.85 && Math.random() < 0.72) b = pick('弃牌');
+    else if (ratio > 0.45 && Math.random() < 0.42) b = pick('弃牌');
+    else if (ratio > 0.20 && Math.random() < 0.16) b = pick('弃牌');
     else b = pick('跟注') || pick('全下') || pick('过牌');
   } else {
-    b = pick('过牌') || pick('跟注');
+    // 有位置时偶尔主动下注，让 AI 也要面对「被诈唬」的局面
+    if (Math.random() < 0.18) b = pick('加注') || pick('下注') || pick('过牌');
+    else b = pick('过牌') || pick('跟注');
   }
   if (!b) b = btns[0];
   try { b.onclick(); } catch (e) { return false; }

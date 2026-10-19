@@ -190,8 +190,9 @@ const MIND = dbg().AI_MIND;
 console.log('===== AI 心智状态 =====');
 Object.keys(MIND).sort((a,b)=>a-b).forEach(s => {
   const m = MIND[s];
-  const nm = (styles[s] && AI[styles[s]]) ? AI[styles[s]].name : '?';
-  console.log('座位' + s + '(' + nm + ')  手数=' + m.hands + '  VPIP=' + (m.vpipHands/m.hands*100).toFixed(1) + '%  PFR=' + (m.pfrHands/m.hands*100).toFixed(1) + '%  翻后主动=' + m.aggActs + '/' + m.postActs + '  tilt=' + m.tilt.toFixed(2));
+  const nm = (styles[s] && AI[styles[s]]) ? AI[styles[s]].name : (s === '0' ? '你' : '?');
+  const pct = v => m.hands ? (v / m.hands * 100).toFixed(1) + '%' : '—';
+  console.log('座位' + s + '(' + nm + ')  手数=' + m.hands + '  VPIP=' + pct(m.vpipHands) + '  PFR=' + pct(m.pfrHands) + '  翻后主动=' + m.aggActs + '/' + m.postActs + '  tilt=' + m.tilt.toFixed(2));
 });
 const rd = dbg().tableRead(1);
 console.log('读桌样本：' + rd.n + ' 人，平均VPIP=' + (rd.avgVpip*100).toFixed(1) + '%，松鱼=' + rd.loose + '，紧手=' + rd.tight);
