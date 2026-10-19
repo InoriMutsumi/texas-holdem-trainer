@@ -1,0 +1,2759 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>德州扑克 · 单挑练习</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: radial-gradient(circle at 50% 20%, #16241e, #08100c 70%);
+    color: #e8efe9;
+    min-width: 1280px;
+    overflow: hidden;
+    user-select: none;
+  }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  /* ---------- 顶栏 ---------- */
+  .topbar {
+    display: flex; align-items: center; gap: 18px;
+    padding: 10px 20px;
+    background: rgba(0,0,0,.35);
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    font-size: 13px;
+  }
+  .topbar .brand { font-weight: 700; color: #ffd479; letter-spacing: 1px; }
+  .topbar .stat { color: #9fb3a8; }
+  .topbar .stat b { color: #e8efe9; font-weight: 600; }
+  .topbar .spacer { flex: 1; }
+  .topbar .btn-mini {
+    background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+    color: #cfe0d6; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  .topbar .btn-mini:hover { background: rgba(255,255,255,.15); }
+  .seg { display: inline-flex; border: 1px solid rgba(255,255,255,.14); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    background: transparent; border: 0; color: #8fa79a; font-size: 12px;
+    padding: 4px 11px; cursor: pointer; font-family: inherit;
+  }
+  .seg button:hover { color: #cfe0d6; }
+  .seg button.on { background: #2f7a58; color: #eafff3; }
+  .ai-level select {
+    background: #16241d; color: #cfe0d6; border: 1px solid rgba(255,255,255,.16);
+    border-radius: 6px; padding: 3px 6px; font-size: 12px; font-family: inherit;
+    cursor: pointer; outline: none;
+  }
+  .msg-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+  .msg-toggle input { accent-color: #2f7a58; cursor: pointer; margin: 0; }
+
+  /* ---------- 主区 ---------- */
+  .main { flex: 1; display: flex; min-height: 0; }
+  .table-wrap { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .table {
+    position: relative; width: 900px; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    padding: 10px 0;
+  }
+  .felt {
+    position: absolute; inset: 40px 40px;
+    background: radial-gradient(ellipse at 50% 45%, #1d6b47, #0f3f2b 70%, #0a2b1e);
+    border-radius: 240px;
+    border: 10px solid #2a1a12;
+    box-shadow: inset 0 0 60px rgba(0,0,0,.55), 0 14px 40px rgba(0,0,0,.6);
+  }
+
+  /* ---------- 座位 ---------- */
+  .seats { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+  .seat {
+    position: absolute; width: 150px; text-align: center;
+    transform: translate(-50%, -50%);
+    transition: left .35s ease, top .35s ease, opacity .2s;
+    pointer-events: auto;
+  }
+  .seat.me { width: 230px; }
+  .seat .avatar-row { display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .seat.me .avatar-row { margin-top: 8px; }
+  .avatar {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: #1b2b23; border: 2px solid #35594a;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; transition: border-color .2s, box-shadow .2s; flex: none;
+  }
+  .seat.me .avatar { width: 52px; height: 52px; font-size: 26px; }
+  .avatar.active { border-color: #ffd479; box-shadow: 0 0 0 3px rgba(255,212,121,.25); }
+  .avatar.out { filter: grayscale(1) brightness(.55); }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+  .avatar.mine { cursor: pointer; }
+  .avatar.mine:hover { border-color: #ffd479; }
+  .seat .who { font-size: 12px; color: #cfe0d6; text-align: left; }
+  .seat .chips { font-size: 14px; font-weight: 700; color: #ffd479; margin-top: 1px; text-align: left; }
+  .seat.me .who { font-size: 13px; }
+  .seat.me .chips { font-size: 15px; }
+  .seat .pos-tag {
+    display: inline-block; font-size: 11px; color: #9fb3a8;
+    border: 1px solid rgba(255,255,255,.15); border-radius: 4px; padding: 0 5px; margin-left: 4px;
+  }
+  .seat .folded-mark { font-size: 11px; color: #8a9a92; margin-top: 2px; }
+  .seat .bubble {
+    position: absolute; bottom: calc(100% + 4px); left: 50%; transform: translateX(-50%);
+    background: #f4f1e8; color: #23302a; font-size: 12px; line-height: 1.3;
+    padding: 5px 10px; border-radius: 10px; white-space: nowrap;
+    opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 5;
+  }
+  .bubble::after {
+    content: ''; position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: #f4f1e8; border-bottom: 0;
+  }
+  .bubble.show { opacity: 1; }
+  .seat .bet-pill {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: -14px;
+    background: rgba(255,212,121,.15); border: 1px solid rgba(255,212,121,.4);
+    color: #ffd479; font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap;
+  }
+  .dealer-btn {
+    position: absolute; left: -10px; top: 30px; width: 22px; height: 22px; border-radius: 50%;
+    background: #f4f1e8; color: #1a1a1a; font-size: 11px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .status-tag {
+    position: absolute; left: 50%; transform: translateX(-50%); bottom: -20px;
+    font-size: 12px; color: #7f9489;
+  }
+
+  /* ---------- 中央 ---------- */
+  .center { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .pot-box {
+    background: rgba(0,0,0,.45); border: 1px solid rgba(255,212,121,.25);
+    border-radius: 20px; padding: 4px 18px; font-size: 14px; color: #ffd479;
+  }
+  .pot-box b { font-size: 18px; }
+  .board { display: flex; gap: 8px; min-height: 78px; align-items: center; }
+  .street-label { font-size: 12px; color: #7f9489; letter-spacing: 2px; }
+
+  /* ---------- 卡牌 ---------- */
+  .card {
+    width: 52px; height: 74px; border-radius: 7px; background: #fbfaf5;
+    color: #1a1a1a; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-weight: 700; box-shadow: 0 2px 6px rgba(0,0,0,.45); position: relative;
+    transition: transform .15s;
+  }
+  .card .rk { font-size: 22px; line-height: 1; }
+  .card .su { font-size: 20px; line-height: 1.1; }
+  .card.red { color: #c0392b; }
+  .card.small { width: 38px; height: 54px; }
+  .card.small .rk { font-size: 16px; }
+  .card.small .su { font-size: 15px; }
+  .card.back {
+    background: repeating-linear-gradient(45deg, #24463a, #24463a 6px, #1c3a30 6px, #1c3a30 12px);
+    color: transparent;
+  }
+  .card.empty { background: transparent; box-shadow: none; border: 1px dashed rgba(255,255,255,.12); }
+  .hole-row { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+
+  /* ---------- 右侧信息 ---------- */
+  .info {
+    width: 250px; background: rgba(0,0,0,.3);
+    border-left: 1px solid rgba(255,255,255,.07);
+    display: flex; flex-direction: column; min-height: 0;
+  }
+  .info-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
+  .info-section h4 { font-size: 12px; color: #7f9489; font-weight: 500; margin-bottom: 8px; letter-spacing: 1px; }
+  .info-row { display: flex; justify-content: space-between; padding: 3px 0; color: #cfe0d6; }
+  .info-row b { color: #ffd479; }
+  .hand-tip { font-size: 12px; color: #9fb3a8; line-height: 1.65; }
+  .log {
+    flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 12px; line-height: 1.6; color: #9fb3a8;
+  }
+  .log .l { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
+  .log .l b { color: #cfe0d6; }
+  .log .l.street-mark { color: #ffd479; margin-top: 6px; }
+
+  /* ---------- 底栏 ---------- */
+  .actionbar {
+    display: flex; align-items: center; gap: 12px; padding: 12px 20px;
+    background: rgba(0,0,0,.4); border-top: 1px solid rgba(255,255,255,.07);
+    min-height: 76px;
+  }
+  .actionbar .hint { color: #7f9489; font-size: 13px; min-width: 240px; }
+  .actionbuttons { display: flex; gap: 10px; flex: 1; }
+  .btn {
+    border: none; border-radius: 9px; padding: 12px 22px; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: filter .15s, transform .05s; color: #10201a;
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn:disabled { opacity: .35; cursor: not-allowed; }
+  .btn.fold { background: #7a4a4a; color: #f3e6e6; }
+  .btn.check { background: #4a7a63; color: #e9f5ef; }
+  .btn.call { background: #4a7a63; color: #e9f5ef; }
+  .btn.raise { background: #d9a641; }
+  .btn.allin { background: #c0392b; color: #fbe9e7; }
+  .btn:hover:not(:disabled) { filter: brightness(1.12); }
+  .raise-panel { display: flex; align-items: center; gap: 10px; }
+  .raise-panel input[type=range] { width: 180px; accent-color: #d9a641; }
+  .raise-panel .amt { font-weight: 700; color: #ffd479; min-width: 70px; text-align: center; }
+  .odds-hint { font-size: 12px; color: #9fb3a8; max-width: 260px; }
+
+  /* ---------- 弹层 ---------- */
+  .overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.6);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+  }
+  .overlay.show { display: flex; }
+  .modal {
+    background: #14211b; border: 1px solid rgba(255,255,255,.12); border-radius: 14px;
+    padding: 22px 26px; width: 560px; max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,.7);
+  }
+  .modal h3 { font-size: 17px; color: #ffd479; margin-bottom: 14px; }
+  .modal .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
+  .modal .row .win { color: #6fcf97; font-weight: 700; }
+  .modal .row .lose { color: #eb5757; }
+  .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+  .modal .actions .btn { padding: 9px 18px; font-size: 14px; }
+  .modal .note { font-size: 12px; color: #7f9489; line-height: 1.7; margin-top: 10px; }
+  .modal .hand-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
+  .modal .hand-line .mini-cards { display: flex; gap: 4px; }
+  .modal .empty-tip { color: #7f9489; font-size: 13px; padding: 20px 0; text-align: center; }
+  .modal .replay-line {
+    display: flex; gap: 8px; align-items: baseline; font-size: 12px;
+    padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.04);
+  }
+  .modal .replay-line .rp-street { color: #7f9489; width: 42px; flex: none; }
+  .modal .replay-line .rp-who {
+    color: #cfe0d6; width: 92px; flex: none;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .modal .replay-line .rp-act { color: #ffd479; flex: 1; }
+  .modal .replay-line .rp-pot { color: #7f9489; flex: none; }
+  .modal .replay-board {
+    font-size: 12px; color: #9fb3a8; padding: 6px 0 4px;
+    letter-spacing: 1px; border-top: 1px dashed rgba(255,255,255,.06); margin-top: 4px;
+  }
+  .modal .replay-ctrl { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .modal .replay-ctrl .btn { padding: 4px 10px; font-size: 12px; }
+  .modal .rv-step { margin-left: auto; font-size: 12px; color: #7f9489; }
+  .modal .replay-pots {
+    display: flex; flex-wrap: wrap; gap: 6px 14px;
+    font-size: 12px; color: #9fb3a8; padding: 4px 0 8px;
+  }
+  .modal .replay-pots .rv-pot-item.now { color: #ffd479; }
+  .modal .replay-pots .rv-pot-item.now b { color: #ffd479; }
+  .modal .replay-pots b { color: #cfe0d6; font-weight: 700; }
+  .modal .replay-list { max-height: 200px; overflow-y: auto; }
+  .modal .replay-line.now { background: rgba(255,212,121,.10); }
+  .modal .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
+  .modal .stat-cell { background: rgba(255,255,255,.03); border-radius: 8px; padding: 10px 12px; }
+  .modal .sc-label { font-size: 12px; color: #7f9489; }
+  .modal .sc-value { font-size: 20px; font-weight: 700; color: #ffd479; margin: 2px 0; }
+  .modal .sc-tip { font-size: 11px; color: #6f8479; }
+  .modal .curve {
+    display: block; width: 100%; height: auto;
+    background: rgba(255,255,255,.02); border-radius: 8px;
+  }
+  .modal .note-box {
+    width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px;
+    background: rgba(0,0,0,.28); color: #cfe0d6; border: 1px solid rgba(255,255,255,.12);
+    border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.6;
+    font-family: inherit;
+  }
+  .modal .note-box:focus { outline: none; border-color: #ffd479; }
+  .modal .num-input {
+    width: 90px; text-align: right; font-size: 14px;
+    background: rgba(0,0,0,.28); color: #ffd479; border: 1px solid rgba(255,255,255,.12);
+    border-radius: 6px; padding: 4px 8px; font-family: inherit;
+  }
+  .modal .num-input:focus { outline: none; border-color: #ffd479; }
+  .modal .avatar-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 8px 0;
+  }
+  .modal .avatar-pick {
+    font-size: 26px; line-height: 1; padding: 10px 0; cursor: pointer;
+    background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.10);
+    border-radius: 10px; font-family: inherit;
+  }
+  .modal .avatar-pick:hover { border-color: #ffd479; background: rgba(255,212,121,.10); }
+  .modal .review-title {
+    margin: 14px 0 8px; font-weight: 700; color: #ffd479; font-size: 13px;
+    border-top: 1px solid rgba(255,255,255,.08); padding-top: 12px;
+  }
+  .modal .review-item {
+    border-left: 3px solid #556; padding: 6px 10px; margin-bottom: 6px;
+    background: rgba(255,255,255,.03); border-radius: 0 6px 6px 0;
+  }
+  .modal .review-item.good { border-left-color: #4caf7d; }
+  .modal .review-item.ok { border-left-color: #8c9a92; }
+  .modal .review-item.mistake { border-left-color: #d0685a; }
+  .modal .review-item .rv-tag {
+    display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px;
+    background: rgba(255,255,255,.08); margin-right: 6px; color: #cfe0d6;
+  }
+  .modal .review-item.good .rv-tag { color: #7fe0a8; }
+  .modal .review-item.mistake .rv-tag { color: #ff9a8a; }
+  .modal .review-item .rv-text { font-size: 13px; color: #dbe7df; line-height: 1.5; margin-top: 3px; }
+  .modal .review-item .rv-assume { font-size: 11px; color: #7f9489; margin-top: 3px; }
+  .modal .rv-jump {
+    margin-left: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer;
+    background: rgba(255,212,121,.12); color: #ffd479;
+    border: 1px solid rgba(255,212,121,.35); border-radius: 10px;
+    font-family: inherit;
+  }
+  .modal .rv-jump:hover { background: rgba(255,212,121,.22); }
+  .modal .guide-tabs { display: flex; gap: 6px; margin: 4px 0 12px; flex-wrap: wrap; }
+  .modal .guide-tab {
+    padding: 5px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
+    background: rgba(255,255,255,.05); border: 1px solid transparent;
+    color: #9fb3a8; font-family: inherit;
+  }
+  .modal .guide-tab.on {
+    background: rgba(255,212,121,.14); border-color: rgba(255,212,121,.4); color: #ffd479;
+  }
+  .modal .guide-body { font-size: 13px; line-height: 1.8; color: #cfe0d6; }
+  .modal .guide-body p { margin: 6px 0; }
+  .modal .guide-body h4 {
+    margin: 16px 0 6px; color: #ffd479; font-size: 14px; font-weight: 700;
+  }
+  .modal .guide-body h4:first-child { margin-top: 0; }
+  .modal .guide-step { display: flex; gap: 10px; margin: 8px 0; align-items: flex-start; }
+  .modal .guide-num {
+    flex: none; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 11px;
+    background: rgba(255,212,121,.16); color: #ffd479;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+  }
+  .modal .hand-rank-row {
+    display: flex; align-items: center; gap: 12px; padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+  }
+  .modal .hand-rank-name { width: 76px; flex: none; font-size: 13px; color: #ffd479; }
+  .modal .hand-rank-cards { display: flex; gap: 4px; flex: none; }
+  .modal .hand-rank-tip { font-size: 12px; color: #9fb3a8; }
+  .modal .term-row {
+    display: flex; gap: 12px; padding: 7px 0;
+    border-bottom: 1px solid rgba(255,255,255,.05);
+  }
+  .modal .term-name { width: 84px; flex: none; color: #ffd479; font-size: 13px; }
+  @media (max-width: 720px) {
+    .modal .hand-rank-cards { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <span class="brand" id="brand">🐋 德州扑克 · 单挑练习</span>
+    <div class="seg" id="modeSeg">
+      <button data-mode="hu" class="on">单挑</button>
+      <button data-mode="six">6 人桌</button>
+      <button data-mode="nine">9 人桌</button>
+    </div>
+    <span class="stat">盲注 <b id="topBlinds">10 / 20</b></span>
+    <span class="stat">筹码 <b id="topChips">2000</b></span>
+    <span class="stat">本场手数 <b id="topHands">0</b></span>
+    <span class="stat">补码 <b id="topRebuys">0</b> 次</span>
+    <label class="stat ai-level">AI <select id="aiLevelSel">
+      <option value="easy">新手</option>
+      <option value="normal">普通</option>
+      <option value="hard">老手</option>
+    </select></label>
+    <label class="stat msg-toggle"><input type="checkbox" id="msgToggle" checked> 消息</label>
+    <span class="spacer"></span>
+    <button class="btn-mini" id="btnGuide">规则</button>
+    <button class="btn-mini" id="btnSettings">设置</button>
+    <button class="btn-mini" id="btnStats">统计</button>
+    <button class="btn-mini" id="btnHistory">牌谱</button>
+    <button class="btn-mini" id="btnRestart">重开</button>
+  </header>
+
+  <div class="main">
+    <div class="table-wrap">
+      <div class="table">
+        <div class="felt"></div>
+
+        <div class="seats" id="seats"></div>
+
+        <div class="center">
+          <div class="pot-box">底池 <b id="potValue">0</b></div>
+          <div class="board" id="board"></div>
+          <div class="street-label" id="streetLabel">等待开局</div>
+        </div>
+      </div>
+    </div>
+
+    <aside class="info">
+      <div class="info-section">
+        <h4>局面</h4>
+        <div class="info-row"><span>位置</span><b id="infoPos">—</b></div>
+        <div class="info-row"><span>要跟注</span><b id="infoToCall">0</b></div>
+        <div class="info-row"><span>所需胜率</span><b id="infoOdds">—</b></div>
+        <div class="info-row"><span>牌力估计</span><b id="infoStrength">—</b></div>
+      </div>
+      <div class="info-section">
+        <h4>起手牌参考</h4>
+        <div class="hand-tip" id="handTip">—</div>
+      </div>
+      <div class="log" id="log"></div>
+    </aside>
+  </div>
+
+  <footer class="actionbar">
+    <div class="hint" id="actionHint">点「开始新一手」发牌</div>
+    <div class="actionbuttons" id="actionButtons"></div>
+    <div class="odds-hint" id="oddsHint"></div>
+  </footer>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="modal" id="modal"></div>
+</div>
+
+<script id="engine">
+/* =====================================================================
+   规则引擎（纯逻辑，不碰 DOM）
+   —— 与《方案.md》§5.1 / §5.2 一一对应
+   ===================================================================== */
+(function (global) {
+  'use strict';
+
+  // ---------------- 基础 ----------------
+  var SUITS = ['s', 'h', 'd', 'c'];
+  var SUIT_SYM = { s: '♠', h: '♥', d: '♦', c: '♣' };
+  var RANK_SYM = { 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '8', 9: '9', 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
+
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) >>> 0;
+      var t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeDeck() {
+    var d = [];
+    for (var i = 0; i < SUITS.length; i++) {
+      for (var r = 2; r <= 14; r++) d.push({ r: r, s: SUITS[i] });
+    }
+    return d;
+  }
+
+  function shuffle(deck, rng) {
+    var a = deck.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(rng() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function cardStr(c) { return RANK_SYM[c.r] + SUIT_SYM[c.s]; }
+
+  // ---------------- 评牌（5 张） ----------------
+  // 返回可字典序比较的数组：[类别, 主牌…, 次级…]
+  // 类别：0 高牌 / 1 对子 / 2 两对 / 3 三条 / 4 顺子 / 5 同花 / 6 葫芦 / 7 四条 / 8 同花顺
+  function eval5(cards) {
+    var rs = cards.map(function (c) { return c.r; }).sort(function (a, b) { return b - a; });
+    var flush = cards.every(function (c) { return c.s === cards[0].s; });
+    var uniq = [];
+    for (var i = 0; i < rs.length; i++) if (uniq.indexOf(rs[i]) < 0) uniq.push(rs[i]);
+    var straightHigh = 0;
+    if (uniq.length === 5) {
+      if (uniq[0] - uniq[4] === 4) straightHigh = uniq[0];
+      else if (uniq[0] === 14 && uniq[1] === 5 && uniq[2] === 4 && uniq[3] === 3 && uniq[4] === 2) straightHigh = 5;
+    }
+    var cnt = {};
+    for (var k = 0; k < rs.length; k++) cnt[rs[k]] = (cnt[rs[k]] || 0) + 1;
+    var groups = Object.keys(cnt).map(function (r) { return { r: +r, c: cnt[r] }; })
+      .sort(function (a, b) { return b.c - a.c || b.r - a.r; });
+
+    if (flush && straightHigh) return [8, straightHigh];
+    if (groups[0].c === 4) return [7, groups[0].r, groups[1].r];
+    if (groups[0].c === 3 && groups[1].c === 2) return [6, groups[0].r, groups[1].r];
+    if (flush) return [5].concat(rs);
+    if (straightHigh) return [4, straightHigh];
+    if (groups[0].c === 3) {
+      return [3, groups[0].r].concat(rs.filter(function (r) { return r !== groups[0].r; }));
+    }
+    if (groups[0].c === 2 && groups[1].c === 2) {
+      var hi = Math.max(groups[0].r, groups[1].r);
+      var lo = Math.min(groups[0].r, groups[1].r);
+      var kicker = rs.filter(function (r) { return r !== hi && r !== lo; })[0];
+      return [2, hi, lo, kicker];
+    }
+    if (groups[0].c === 2) {
+      return [1, groups[0].r].concat(rs.filter(function (r) { return r !== groups[0].r; }));
+    }
+    return [0].concat(rs);
+  }
+
+  var COMBOS_7_5 = (function () {
+    var res = [];
+    for (var a = 0; a < 7; a++) for (var b = a + 1; b < 7; b++) for (var c = b + 1; c < 7; c++)
+      for (var d = c + 1; d < 7; d++) for (var e = d + 1; e < 7; e++) res.push([a, b, c, d, e]);
+    return res;
+  })();
+
+  function cmpVal(a, b) {
+    var n = Math.max(a.length, b.length);
+    for (var i = 0; i < n; i++) {
+      var x = a[i] || 0, y = b[i] || 0;
+      if (x !== y) return x - y;
+    }
+    return 0;
+  }
+
+  function eval7(cards) {
+    // 支持 5~7 张：取所有 5 张组合里最大的一手
+    var n = cards.length;
+    if (n < 5) throw new Error('eval7 至少需要 5 张牌，收到 ' + n);
+    var best = null;
+    for (var a = 0; a < n - 4; a++) {
+      for (var b = a + 1; b < n - 3; b++) {
+        for (var c = b + 1; c < n - 2; c++) {
+          for (var d = c + 1; d < n - 1; d++) {
+            for (var e = d + 1; e < n; e++) {
+              var v = eval5([cards[a], cards[b], cards[c], cards[d], cards[e]]);
+              if (!best || cmpVal(v, best) > 0) best = v;
+            }
+          }
+        }
+      }
+    }
+    return best;
+  }
+
+  var HAND_CN = ['高牌', '一对', '两对', '三条', '顺子', '同花', '葫芦', '四条', '同花顺'];
+
+  // ---------------- 建局 ----------------
+  function createGame(opts) {
+    opts = opts || {};
+    var mode = opts.mode === 'six' ? 'six' : (opts.mode === 'nine' ? 'nine' : 'hu');
+    var n = mode === 'hu' ? 2 : (mode === 'nine' ? 9 : 6);
+    var names = {
+      hu: [opts.playerName || '你', opts.aiName || 'AI·小白'],
+      six: ['你', 'AI·阿鲸', 'AI·小海', 'AI·泡泡', 'AI·浪花', 'AI·珊瑚'],
+      nine: ['你', 'AI·阿鲸', 'AI·小海', 'AI·泡泡', 'AI·浪花', 'AI·珊瑚',
+             'AI·海星', 'AI·水母', 'AI·墨鱼']
+    }[mode];
+    var avatars = ['🐋', '🦈', '🐙', '🐠', '🐢', '🦀', '⭐', '🪼', '🦑'];
+    var chips = opts.startingChips || 2000;
+    var bb = opts.bigBlind || 20;
+    var players = [];
+    for (var i = 0; i < n; i++) {
+      players.push({
+        id: i, name: names[i], seat: i, chips: chips,
+        hole: [], streetBet: 0, totalBet: 0,
+        folded: false, allIn: false, acted: false,
+        facedRaiseAmount: 0, actedBeforeLastFullRaise: false, reopenEligible: false,
+        avatar: avatars[i % avatars.length], emotion: 'idle',
+        holeRevealed: false
+      });
+    }
+    return {
+      mode: mode,
+      players: players,
+      smallBlind: opts.smallBlind || 10,
+      bigBlind: bb,
+      buyIn: opts.buyIn || chips,
+      handId: 0,
+      buttonSeat: 0,
+      seed: opts.seed || (Date.now() % 2147483647),
+      deck: [], deckState: [], board: [],
+      street: 'idle',
+      pot: 0,
+      streetCurrentBet: 0,
+      lastFullRaiseSize: bb,
+      raiseAccumulator: 0,
+      activeSeat: -1,
+      lastAggressor: -1,
+      sidePots: [], deadMoney: [], refunds: [],
+      actions: [], messages: [],
+      result: null,
+      handOver: true,
+      aiLevel: opts.aiLevel || 'normal',
+      handsPlayed: 0,
+      rebuys: 0,
+      log: []
+    };
+  }
+
+  // ---------------- 位置 ----------------
+  function sbSeat(g) { return g.mode === 'hu' ? g.buttonSeat : (g.buttonSeat + 1) % g.players.length; }
+  function bbSeat(g) { return g.mode === 'hu' ? (g.buttonSeat + 1) % g.players.length : (g.buttonSeat + 2) % g.players.length; }
+
+  function alivePlayers(g) {
+    return g.players.filter(function (p) { return !p.folded; });
+  }
+  function canActPlayers(g) {
+    return g.players.filter(function (p) { return !p.folded && !p.allIn; });
+  }
+
+  function nextToAct(g, fromSeat) {
+    var n = g.players.length;
+    for (var i = 1; i <= n; i++) {
+      var s = (fromSeat + i) % n;
+      var p = g.players[s];
+      if (!p.folded && !p.allIn) return s;
+    }
+    return -1;
+  }
+
+  function firstToActPostflop(g) {
+    var n = g.players.length;
+    var start = (g.buttonSeat + 1) % n;
+    for (var i = 0; i < n; i++) {
+      var s = (start + i) % n;
+      var p = g.players[s];
+      if (!p.folded && !p.allIn) return s;
+    }
+    return -1;
+  }
+
+  // ---------------- 发牌 ----------------
+  function draw(g) {
+    // 从牌堆顶取一张，并记入 deckState
+    var c = g.deck.pop();
+    return { r: c.r, s: c.s };
+  }
+
+  function burnAndDeal(g, count) {
+    var b = draw(g);
+    g.deckState.push({ r: b.r, s: b.s, burn: true });
+    for (var i = 0; i < count; i++) {
+      var c = draw(g);
+      g.board.push({ r: c.r, s: c.s });
+      g.deckState.push({ r: c.r, s: c.s });
+    }
+  }
+
+  // ---------------- 开一手 ----------------
+  function startHand(g) {
+    if (g.players.some(function (p) { return p.chips <= 0; })) {
+      throw new Error('有玩家筹码为 0，需先补码');
+    }
+    g.handId++;
+    g.actions = [];
+    g.messages = [];
+    g.board = [];
+    g.deckState = [];
+    g.sidePots = [];
+    g.deadMoney = [];
+    g.refunds = [];
+    g.pot = 0;
+    g.streetCurrentBet = 0;
+    g.lastFullRaiseSize = g.bigBlind;
+    g.raiseAccumulator = 0;
+    g.street = 'preflop';
+    g.lastAggressor = -1;
+    g.result = null;
+    g.handOver = false;
+    g.log = [];
+    g.streetLabel = '翻前';
+
+    g.players.forEach(function (p) {
+      p.hole = [];
+      p.streetBet = 0;
+      p.totalBet = 0;
+      p.folded = false;
+      p.allIn = false;
+      p.acted = false;
+      p.facedRaiseAmount = 0;
+      p.actedBeforeLastFullRaise = false;
+      p.reopenEligible = false;
+      p.holeRevealed = false;
+      p.emotion = 'idle';
+    });
+
+    // 洗牌
+    var rng = mulberry32((g.seed + g.handId * 7919) >>> 0);
+    g.deck = shuffle(makeDeck(), rng);
+
+    // 发底牌：从 SB 起，两轮各一张
+    var n = g.players.length;
+    var first = sbSeat(g);
+    for (var round = 0; round < 2; round++) {
+      for (var i = 0; i < n; i++) {
+        var seat = (first + i) % n;
+        var c = draw(g);
+        g.players[seat].hole.push({ r: c.r, s: c.s });
+        g.deckState.push({ r: c.r, s: c.s, hole: true });
+      }
+    }
+
+    // 盲注
+    var sbP = g.players[sbSeat(g)];
+    var bbP = g.players[bbSeat(g)];
+    postBlind(g, sbP, g.smallBlind);
+    postBlind(g, bbP, g.bigBlind);
+    // 法定盲注额不因短码改变
+    g.streetCurrentBet = g.bigBlind;
+
+    // 先行动
+    var startSeat;
+    if (g.mode === 'hu') startSeat = g.buttonSeat;           // BTN/SB 先
+    else startSeat = (g.buttonSeat + 3) % n;                 // UTG
+    g.activeSeat = findPlayable(g, startSeat);
+
+    logLine(g, '—— 第 ' + g.handId + ' 手开始，盲注 ' + g.smallBlind + '/' + g.bigBlind + ' ——');
+
+    if (g.activeSeat < 0) {
+      // 开局就没人能行动（极端短码），直接推进
+      g.activeSeat = -1;
+      advanceStreet(g);
+    }
+    return g;
+  }
+
+  function findPlayable(g, seat) {
+    var n = g.players.length;
+    for (var i = 0; i < n; i++) {
+      var s = (seat + i) % n;
+      var p = g.players[s];
+      if (!p.folded && !p.allIn) return s;
+    }
+    return -1;
+  }
+
+  function postBlind(g, p, amount) {
+    var pay = Math.min(amount, p.chips);
+    p.chips -= pay;
+    p.streetBet += pay;
+    p.totalBet += pay;
+    g.pot += pay;
+    if (p.chips === 0) p.allIn = true;
+    p.acted = false;
+  }
+
+  // ---------------- 重新开放加注权 ----------------
+  // 轮到该玩家行动时调用：先复位，再按「完整加注前已行动 + 累计面对额 + 非最后抬价者」判定
+  function computeReopen(g, seat) {
+    var p = g.players[seat];
+    var ok = false;
+    if (!p.folded && !p.allIn && p.actedBeforeLastFullRaise === true) {
+      if (p.facedRaiseAmount >= g.lastFullRaiseSize && g.lastAggressor !== seat) {
+        ok = true;
+      }
+    }
+    p.reopenEligible = ok;
+    return ok;
+  }
+
+  // ---------------- 合法动作 ----------------
+  function legalActionsFor(g, seat) {
+    var p = g.players[seat];
+    if (g.activeSeat !== seat || p.folded || p.allIn) return [];
+    var toCall = g.streetCurrentBet - p.streetBet;
+    var acts = [];
+    acts.push({ type: 'fold' });
+    if (toCall <= 0) {
+      acts.push({ type: 'check' });
+    } else {
+      acts.push({ type: 'call', amount: Math.min(toCall, p.chips) });
+    }
+
+    // 重新开放判定：本轮行动是否需要「完整加注前已行动但累计不够」的限制
+    p.reopenEligible = false;
+    var canRaise = true;
+    if (p.actedBeforeLastFullRaise === true) {
+      canRaise = computeReopen(g, seat);
+    }
+
+    if (canRaise) {
+      // 加注：最小 = 当前注 + 最近完整加注增量
+      var minRaiseTo = g.streetCurrentBet + g.lastFullRaiseSize;
+      var maxRaiseTo = p.streetBet + p.chips;
+      if (minRaiseTo <= maxRaiseTo) {
+        acts.push({ type: 'raise', min: minRaiseTo, max: maxRaiseTo });
+      }
+      if (maxRaiseTo > g.streetCurrentBet) {
+        acts.push({ type: 'allin', amount: maxRaiseTo });
+      }
+    } else {
+      // 没有加注权：只能全下跟注（不超过当前注）
+      var allInTo = p.streetBet + p.chips;
+      if (p.chips > 0 && allInTo <= g.streetCurrentBet) {
+        acts.push({ type: 'allin', amount: allInTo });
+      }
+    }
+    return acts;
+  }
+
+  // ---------------- 执行动作 ----------------
+  function act(g, seat, action) {
+    if (seat == null || seat < 0 || !g.players[seat]) throw new Error('无效的座位：' + seat);
+    var p = g.players[seat];
+    if (g.activeSeat !== seat) throw new Error('不是该玩家行动');
+    if (p.folded || p.allIn) throw new Error('该玩家无法行动');
+
+    var prevCurrentBet = g.streetCurrentBet;
+    var potBefore = g.pot;
+    var toCallBefore = Math.max(0, g.streetCurrentBet - p.streetBet);
+    var aliveBefore = g.players.filter(function (q) { return !q.folded; }).length;
+    var pay = 0;
+    var type = action.type;
+
+    if (type === 'fold') {
+      p.folded = true;
+    } else if (type === 'check') {
+      if (p.streetBet !== g.streetCurrentBet) throw new Error('不能过牌：还有待跟注');
+    } else if (type === 'call') {
+      pay = Math.min(g.streetCurrentBet - p.streetBet, p.chips);
+    } else if (type === 'raise' || type === 'allin') {
+      var target = action.amount;
+      if (type === 'allin') target = p.streetBet + p.chips;
+      else if (target == null) target = action.min;   // 防御：只给了 min/max 时按最小加注
+      if (typeof target !== 'number' || isNaN(target)) throw new Error('加注金额无效');
+      if (target <= g.streetCurrentBet) {
+        // 全下不足以跟注：视为短全下
+        target = p.streetBet + p.chips;
+      }
+      pay = Math.min(target - p.streetBet, p.chips);
+      if (pay < 0) pay = 0;
+    } else {
+      throw new Error('未知动作 ' + type);
+    }
+
+    var beforeTotal = p.totalBet;
+    p.chips -= pay;
+    p.streetBet += pay;
+    p.totalBet += pay;
+    g.pot += pay;
+    if (p.chips === 0) p.allIn = true;
+
+    var isRaise = p.streetBet > prevCurrentBet;
+    var raiseDelta = p.streetBet - prevCurrentBet;
+    var fullRaise = false;
+
+    // 落账：先更新玩家自身状态（acted 已置位），再做完整加注判定与快照
+    p.facedRaiseAmount = 0;
+    p.acted = true;
+
+    if (isRaise) {
+      g.streetCurrentBet = p.streetBet;
+      if (raiseDelta >= g.lastFullRaiseSize) {
+        fullRaise = true;
+      } else {
+        g.raiseAccumulator += raiseDelta;
+        if (g.raiseAccumulator >= g.lastFullRaiseSize) {
+          fullRaise = true;
+        }
+      }
+      // 玩家字段：其他已行动者累加面对的新增额
+      g.players.forEach(function (q) {
+        if (q === p) return;
+        if (q.acted) q.facedRaiseAmount += raiseDelta;
+      });
+      if (fullRaise) {
+        // 快照：本次 action 落账之后、完整加注处理之前
+        g.players.forEach(function (q) { q.actedBeforeLastFullRaise = q.acted; });
+        g.lastFullRaiseSize = (raiseDelta >= g.lastFullRaiseSize) ? raiseDelta : g.raiseAccumulator;
+        g.raiseAccumulator = 0;
+        g.lastAggressor = seat;
+      }
+    }
+
+    // 记录 action
+    var rec = {
+      street: g.street,
+      playerId: p.id,
+      type: type,
+      amountBefore: beforeTotal,
+      amountAdded: pay,
+      streetBetAfter: p.streetBet,
+      potAfter: g.pot,
+      potBefore: potBefore,
+      toCallBefore: toCallBefore,
+      aliveBefore: aliveBefore,
+      streetCurrentBetAfter: g.streetCurrentBet,
+      lastFullRaiseSizeAfter: g.lastFullRaiseSize,
+      raiseAccumulatorAfter: g.raiseAccumulator,
+      board: g.board.slice(),
+      fullRaise: fullRaise
+    };
+    g.actions.push(rec);
+    logAction(g, p, type, pay);
+
+    // 推进
+    maybeAdvance(g);
+    return rec;
+  }
+
+  function maybeAdvance(g) {
+    var alive = alivePlayers(g);
+    if (alive.length <= 1) {
+      g.activeSeat = -1;
+      settle(g);
+      return;
+    }
+    var actable = canActPlayers(g);
+    if (actable.length === 0) {
+      // 全员全下：发完公共牌
+      g.activeSeat = -1;
+      runOutBoard(g);
+      return;
+    }
+    // 下注轮结束判定
+    var over = actable.every(function (q) {
+      return q.acted && q.streetBet === g.streetCurrentBet;
+    });
+    if (over) {
+      advanceStreet(g);
+      return;
+    }
+    var nxt = nextToAct(g, g.activeSeat);
+    g.activeSeat = nxt;
+    if (nxt < 0) {
+      // 没有可行动的人，但有人未跟平？理论不该出现
+      advanceStreet(g);
+    }
+  }
+
+  function advanceStreet(g) {
+    // 每街开始清空玩家级字段
+    g.players.forEach(function (p) {
+      p.streetBet = 0;
+      p.acted = false;
+      p.facedRaiseAmount = 0;
+      p.actedBeforeLastFullRaise = false;
+      p.reopenEligible = false;
+    });
+    g.streetCurrentBet = 0;
+    g.lastFullRaiseSize = g.bigBlind;
+    g.raiseAccumulator = 0;
+    g.lastAggressor = -1;
+
+    if (g.street === 'preflop') {
+      burnAndDeal(g, 3);
+      g.street = 'flop';
+    } else if (g.street === 'flop') {
+      burnAndDeal(g, 1);
+      g.street = 'turn';
+    } else if (g.street === 'turn') {
+      burnAndDeal(g, 1);
+      g.street = 'river';
+    } else if (g.street === 'river') {
+      g.street = 'showdown';
+      g.activeSeat = -1;
+      settle(g);
+      return;
+    }
+    g.streetLabel = { preflop: '翻前', flop: '翻牌', turn: '转牌', river: '河牌', showdown: '摊牌' }[g.street];
+    logLine(g, '【' + g.streetLabel + '】' + g.board.map(cardStr).join(' '));
+
+    var first = firstToActPostflop(g);
+    if (first < 0) {
+      // 都全下了，继续发
+      advanceStreet(g);
+      return;
+    }
+    g.activeSeat = first;
+    // 只剩一人能行动且无需跟注时，直接跳过
+    var actable = canActPlayers(g);
+    if (actable.length === 1 && actable[0].streetBet === g.streetCurrentBet) {
+      // 让他过牌结束本街
+    }
+  }
+
+  function runOutBoard(g) {
+    if (g.street === 'preflop') { burnAndDeal(g, 3); g.street = 'flop'; }
+    if (g.street === 'flop') { burnAndDeal(g, 1); g.street = 'turn'; }
+    if (g.street === 'turn') { burnAndDeal(g, 1); g.street = 'river'; }
+    g.streetLabel = { preflop: '翻前', flop: '翻牌', turn: '转牌', river: '河牌', showdown: '摊牌' }[g.street];
+    g.street = 'showdown';
+    g.activeSeat = -1;
+    settle(g);
+  }
+
+  // ---------------- 边池与结算 ----------------
+  function buildLayers(g) {
+    // 所有玩家的 totalBet 唯一层级，升序
+    var levels = [];
+    g.players.forEach(function (p) {
+      if (levels.indexOf(p.totalBet) < 0) levels.push(p.totalBet);
+    });
+    levels.sort(function (a, b) { return a - b; });
+
+    var pots = [];
+    var prev = 0;
+    for (var i = 0; i < levels.length; i++) {
+      var lv = levels[i];
+      if (lv <= prev) continue;
+      var contributors = g.players.filter(function (p) { return p.totalBet >= lv; });
+      var amount = (lv - prev) * contributors.length;
+      var eligible = contributors.filter(function (p) { return !p.folded; }).map(function (p) { return p.id; });
+      if (amount > 0) {
+        pots.push({
+          amount: amount,
+          eligible: eligible,
+          resolution: eligible.length >= 2 ? 'showdown' : (eligible.length === 1 ? 'direct' : 'dead'),
+          winnerId: eligible.length === 1 ? eligible[0] : null,
+          level: lv
+        });
+      }
+      prev = lv;
+    }
+    return pots;
+  }
+
+  function mergeDeadLayers(g, pots) {
+    // dead 层并入最近的下方可竞争层
+    var result = pots.map(function (p) {
+      return { amount: p.amount, eligible: p.eligible.slice(), resolution: p.resolution, winnerId: p.winnerId, level: p.level };
+    });
+    g.deadMoney = [];
+    for (var i = 0; i < result.length; i++) {
+      if (result[i].resolution !== 'dead') continue;
+      var target = -1;
+      for (var j = i - 1; j >= 0; j--) {
+        if (result[j].resolution !== 'dead') { target = j; break; }
+      }
+      if (target < 0) {
+        for (var k = i + 1; k < result.length; k++) {
+          if (result[k].resolution !== 'dead') { target = k; break; }
+        }
+      }
+      if (target < 0) continue; // 理论不可达
+      g.deadMoney.push({ amount: result[i].amount, mergedIntoLayer: target });
+      result[target].amount += result[i].amount;
+      result[i].amount = 0;
+    }
+    return result.filter(function (p) { return p.amount > 0; });
+  }
+
+  function seatOrderFromButton(g, seat) {
+    var n = g.players.length;
+    return (seat - g.buttonSeat - 1 + n) % n;
+  }
+
+  function bestValue(g, p) {
+    return eval7(p.hole.concat(g.board));
+  }
+
+  function settle(g) {
+    g.street = 'showdown';
+    g.activeSeat = -1;
+    g.handOver = true;
+
+    var alive = alivePlayers(g);
+    var pots = mergeDeadLayers(g, buildLayers(g));
+    g.sidePots = pots.map(function (p) {
+      return { amount: p.amount, eligible: p.eligible.slice(), resolution: p.resolution, winnerId: p.winnerId };
+    });
+
+    var totalBefore = g.players.reduce(function (s, p) { return s + p.totalBet; }, 0);
+    var potSum = pots.reduce(function (s, p) { return s + p.amount; }, 0);
+    var refundSum = g.refunds.reduce(function (s, p) { return s + p.amount; }, 0);
+    if (potSum + refundSum !== totalBefore) {
+      throw new Error('守恒断言失败：sidePots=' + potSum + ' refunds=' + refundSum + ' totalBet=' + totalBefore);
+    }
+
+    var results = [];
+    var handNames = {};
+
+    if (alive.length === 1) {
+      // 只剩一人：直接收池，不亮牌
+      var only = alive[0];
+      var pool = g.pot;
+      only.chips += pool;
+      results.push({ playerId: only.id, amount: pool, reason: '其他人都弃牌' });
+      g.result = { winners: results, pot: pool, showdown: false };
+    } else {
+      // 逐个池分配
+      pots.forEach(function (pot, idx) {
+        if (pot.resolution === 'direct') {
+          var w = g.players[pot.winnerId];
+          w.chips += pot.amount;
+          results.push({ playerId: w.id, amount: pot.amount, reason: '未被跟注的投入', potIndex: idx });
+          return;
+        }
+        // showdown：比牌
+        var contenders = pot.eligible.map(function (id) { return g.players[id]; });
+        var vals = contenders.map(function (p) {
+          var v = bestValue(g, p);
+          handNames[p.id] = HAND_CN[v[0]];
+          return { p: p, v: v };
+        });
+        var best = vals[0].v;
+        vals.forEach(function (x) { if (cmpVal(x.v, best) > 0) best = x.v; });
+        var winners = vals.filter(function (x) { return cmpVal(x.v, best) === 0; }).map(function (x) { return x.p; });
+
+        var share = Math.floor(pot.amount / winners.length);
+        var rem = pot.amount - share * winners.length;
+        winners.forEach(function (p) { p.chips += share; });
+        var ordered = winners.slice().sort(function (a, b) {
+          return seatOrderFromButton(g, a.seat) - seatOrderFromButton(g, b.seat);
+        });
+        for (var i = 0; i < rem; i++) ordered[i].chips += 1;
+
+        winners.forEach(function (p) {
+          var got = share + (rem > 0 && ordered.indexOf(p) < rem ? 1 : 0);
+          results.push({
+            playerId: p.id, amount: got, reason: HAND_CN[best[0]],
+            potIndex: idx, isMain: idx === 0, hand: best
+          });
+        });
+      });
+      // 亮牌
+      alive.forEach(function (p) { p.holeRevealed = true; });
+      g.result = { winners: results, pot: totalBefore, showdown: true, handNames: handNames };
+    }
+
+    g.pot = 0;
+    g.streetLabel = '摊牌';
+    logLine(g, '结算：' + results.map(function (r) {
+      return g.players[r.playerId].name + ' +' + r.amount;
+    }).join('，'));
+    g.handsPlayed++;
+    return g.result;
+  }
+
+  // ---------------- 日志 ----------------
+  function logLine(g, text) {
+    g.log.push({ type: 'text', text: text });
+  }
+
+  function logAction(g, p, type, pay) {
+    var cn = { fold: '弃牌', check: '过牌', call: '跟注', raise: '加注', allin: '全下' };
+    var txt = p.name + ' ' + (cn[type] || type);
+    if (pay > 0) txt += ' ' + pay;
+    g.log.push({ type: 'action', text: txt });
+  }
+
+  // ---------------- 下一手 ----------------
+  function nextHand(g) {
+    // 按钮轮转：移给下一位有筹码的玩家
+    var n = g.players.length;
+    var next = (g.buttonSeat + 1) % n;
+    var guard = 0;
+    while (g.players[next].chips <= 0 && guard < n) {
+      next = (next + 1) % n;
+      guard++;
+    }
+    g.buttonSeat = next;
+    // 自动补码
+    g.players.forEach(function (p) {
+      if (p.chips <= 0) {
+        p.chips = g.buyIn;
+        g.rebuys++;
+        g.rebuyEvents = g.rebuyEvents || [];
+        g.rebuyEvents.push({ type: 'autoRebuy', amount: g.buyIn, time: Date.now() });
+      }
+    });
+    startHand(g);
+  }
+
+  // ---------------- 导出（给 UI 与测试） ----------------
+  global.PokerEngine = {
+    createGame: createGame,
+    startHand: startHand,
+    nextHand: nextHand,
+    legalActionsFor: legalActionsFor,
+    computeReopen: computeReopen,
+    act: act,
+    advanceStreet: advanceStreet,
+    settle: settle,
+    eval5: eval5,
+    eval7: eval7,
+    cmpVal: cmpVal,
+    buildLayers: buildLayers,
+    mergeDeadLayers: mergeDeadLayers,
+    alivePlayers: alivePlayers,
+    canActPlayers: canActPlayers,
+    sbSeat: sbSeat,
+    bbSeat: bbSeat,
+    bestValue: bestValue,
+    makeDeck: makeDeck,
+    shuffle: shuffle,
+    mulberry32: mulberry32,
+    HAND_CN: HAND_CN,
+    cardStr: cardStr,
+    RANK_SYM: RANK_SYM,
+    SUIT_SYM: SUIT_SYM
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+
+<script id="ui">
+/* =====================================================================
+   界面层：渲染 / 玩家操作 / 简单 AI / 牌谱
+   ===================================================================== */
+(function () {
+  'use strict';
+  var E = window.PokerEngine;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var game = null;
+  var busy = false;            // AI 思考中
+  var resultShown = false;     // 本手结果弹层是否已弹
+  var raiseValue = 0;
+
+  // ---------------- 本地存储 ----------------
+  var LS = {
+    get: function (k, d) {
+      try { var v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); }
+      catch (e) { return d; }
+    },
+    set: function (k, v) {
+      try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 配额满了就算了 */ }
+    }
+  };
+
+  function loadSettings() {
+    var s = LS.get('poker.save.v2', null);
+    if (!s || typeof s !== 'object') {
+      return {
+        chips: 2000, hands: 0, rebuys: 0, table: 'hu', aiLevel: 'normal',
+        messageEnabled: true, myAvatarKey: null, blinds: { sb: 10, bb: 20 }
+      };
+    }
+    var set = s.settings || {};
+    return {
+      chips: typeof s.chips === 'number' ? s.chips : 2000,
+      hands: typeof s.hands === 'number' ? s.hands : 0,
+      rebuys: typeof s.rebuys === 'number' ? s.rebuys : 0,
+      table: set.table === 'nine' ? 'nine' : (set.table === 'six' ? 'six' : 'hu'),
+      aiLevel: set.aiLevel || 'normal',
+      messageEnabled: set.messageEnabled !== false,
+      myAvatarKey: set.myAvatarKey || null,
+      myEmoji: set.myEmoji || '🐋',
+      blinds: (set.blinds && set.blinds.sb > 0 && set.blinds.bb >= set.blinds.sb)
+        ? { sb: set.blinds.sb, bb: set.blinds.bb }
+        : { sb: 10, bb: 20 }
+    };
+  }
+
+  function saveSettings(s) {
+    var old = LS.get('poker.save.v2', null) || {};
+    old.schemaVersion = 2;
+    old.chips = s.chips;
+    old.hands = s.hands;
+    old.rebuys = s.rebuys;
+    if (!old.settings) {
+      old.settings = {
+        table: 'hu', aiLevel: 'normal',
+        blinds: { sb: 10, bb: 20 }, buyIn: 2000, autoRebuy: true,
+        messageEnabled: true, avatars: []
+      };
+    }
+    if (s.table) old.settings.table = s.table;
+    if (s.aiLevel) old.settings.aiLevel = s.aiLevel;
+    if (typeof s.messageEnabled === 'boolean') old.settings.messageEnabled = s.messageEnabled;
+    if (s.myAvatarKey !== undefined) old.settings.myAvatarKey = s.myAvatarKey;
+    if (s.myEmoji) old.settings.myEmoji = s.myEmoji;
+    if (s.blinds) old.settings.blinds = s.blinds;
+    if (!old.stats) old.stats = { vpip: 0, pfr: 0, won: 0, ev: 0 };
+    LS.set('poker.save.v2', old);
+  }
+
+  // ---------------- 新局 ----------------
+  function urlTable() {
+    try {
+      var m = String(location.search || '').match(/[?&]table=(hu|six|nine)\b/);
+      return m ? m[1] : null;
+    } catch (e) { return null; }
+  }
+
+  function newGame() {
+    var s = loadSettings();
+    var forced = urlTable();
+    if (forced) s.table = forced;
+    messages = [];
+    var chips = s.chips > 0 ? s.chips : 2000;
+    game = E.createGame({
+      mode: s.table,
+      startingChips: chips,
+      smallBlind: s.blinds.sb,
+      bigBlind: s.blinds.bb,
+      buyIn: s.blinds.bb * 100,
+      aiLevel: s.aiLevel,
+      seed: (Date.now() % 2147483647)
+    });
+    game.handsPlayed = s.hands || 0;
+    game.rebuys = s.rebuys || 0;
+    game.settings = s;
+    rebuySynced = (game.rebuyEvents || []).length;
+    if (s.myEmoji) game.players[0].avatar = s.myEmoji;
+    busy = false;
+    resultShown = false;
+    var brandMap = {
+      hu: '🐋 德州扑克 · 单挑练习',
+      six: '🐋 德州扑克 · 6 人桌',
+      nine: '🐋 德州扑克 · 9 人桌'
+    };
+    $('brand').textContent = brandMap[s.table] || brandMap.hu;
+    $('aiLevelSel').value = s.aiLevel;
+    $('msgToggle').checked = s.messageEnabled !== false;
+    Array.prototype.forEach.call($('modeSeg').children, function (b) {
+      b.classList.toggle('on', b.getAttribute('data-mode') === s.table);
+    });
+    buildSeats();
+    E.startHand(game);
+    render();
+    scheduleAI();
+  }
+
+  // ---------------- 渲染 ----------------
+  function cardEl(c, small) {
+    var d = document.createElement('div');
+    d.className = 'card' + (small ? ' small' : '');
+    if (!c) { d.className += ' empty'; return d; }
+    if (c.hidden) { d.className += ' back'; return d; }
+    if (c.s === 'h' || c.s === 'd') d.className += ' red';
+    var rk = document.createElement('span'); rk.className = 'rk'; rk.textContent = E.RANK_SYM[c.r];
+    var su = document.createElement('span'); su.className = 'su'; su.textContent = E.SUIT_SYM[c.s];
+    d.appendChild(rk); d.appendChild(su);
+    return d;
+  }
+
+  function posLabel(seat) {
+    if (game.mode === 'hu') return seat === game.buttonSeat ? 'BTN/SB' : 'BB';
+    var n = game.players.length;
+    var off = (seat - game.buttonSeat + n) % n;
+    var names = n === 9
+      ? ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO']
+      : ['BTN', 'SB', 'BB', 'UTG', 'MP', 'CO'];
+    return names[off] || ('#' + off);
+  }
+
+  // ---------------- 座位布局 ----------------
+  var seatEls = [];
+
+  // ---------------- 头像 ----------------
+  var AVATAR_PREFIX = 'poker.avatar.v1.';
+  var AVATAR_MAX_BYTES = 8 * 1024;
+
+  function avatarDataUrl(key) {
+    if (!key) return null;
+    return LS.get(AVATAR_PREFIX + key, null);
+  }
+
+  function clearAvatar(key) {
+    if (!key) return;
+    try { localStorage.removeItem(AVATAR_PREFIX + key); } catch (e) {}
+  }
+
+  function dataUrlBytes(url) {
+    var i = url.indexOf(',');
+    if (i < 0) return url.length;
+    return Math.round((url.length - i - 1) * 3 / 4);
+  }
+
+  function setAvatarFromFile(file) {
+    if (!file) return;
+    if (!/^image\//.test(file.type || '')) { alert('只能选图片文件。'); return; }
+    var reader = new FileReader();
+    reader.onload = function () {
+      var img = new Image();
+      img.onload = function () {
+        var cv = document.createElement('canvas');
+        cv.width = 64; cv.height = 64;
+        var ctx = cv.getContext('2d');
+        var side = Math.min(img.width, img.height);
+        ctx.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, 64, 64);
+        var url = cv.toDataURL('image/jpeg', 0.80);
+        if (dataUrlBytes(url) > AVATAR_MAX_BYTES) url = cv.toDataURL('image/jpeg', 0.55);
+        if (dataUrlBytes(url) > AVATAR_MAX_BYTES) {
+          alert('这张图压到 64×64 还有 ' + Math.ceil(dataUrlBytes(url) / 1024) + 'KB，超过 8KB，换一张吧。');
+          return;
+        }
+        var st = loadSettings();
+        clearAvatar(st.myAvatarKey);
+        var key = (typeof crypto !== 'undefined' && crypto.randomUUID)
+          ? crypto.randomUUID()
+          : ('xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+              var r = Math.random() * 16 | 0;
+              return (c === 'x' ? r : (r & 3 | 8)).toString(16);
+            }));
+        LS.set(AVATAR_PREFIX + key, url);
+        st.myAvatarKey = key;
+        saveSettings(st);
+        if (game) game.settings = st;
+        renderSeats();
+      };
+      img.onerror = function () { alert('这张图片读不出来，换一张试试。'); };
+      img.src = reader.result;
+    };
+    reader.onerror = function () { alert('读取文件失败。'); };
+    reader.readAsDataURL(file);
+  }
+
+  function pickAvatar() {
+    var builtin = ['🐋', '🦈', '🐙', '🐠', '🐢', '🦀', '⭐', '🪼', '🦑', '🐬', '🐳', '🦐'];
+    var html = '<h3>选头像</h3><div class="avatar-grid">';
+    builtin.forEach(function (e) {
+      html += '<button class="avatar-pick" data-a="' + e + '">' + e + '</button>';
+    });
+    html += '</div><div class="note">内置头像不占存储；上传图片会压到 64×64、不超过 8KB。</div>';
+    html += '<div class="actions">' +
+      '<button class="btn fold" id="btnUploadAvatar">上传图片</button>' +
+      '<button class="btn check" id="btnCloseAvatar">关闭</button></div>';
+    openModal(html);
+    Array.prototype.forEach.call(document.querySelectorAll('.avatar-pick'), function (b) {
+      b.onclick = function () {
+        var e = b.getAttribute('data-a');
+        var st = loadSettings();
+        clearAvatar(st.myAvatarKey);
+        st.myAvatarKey = null;
+        st.myEmoji = e;
+        saveSettings(st);
+        if (game) {
+          game.settings = st;
+          game.players[0].avatar = e;
+        }
+        closeModal();
+        renderSeats();
+      };
+    });
+    $('btnUploadAvatar').onclick = function () {
+      closeModal();
+      pickAvatarFile();
+    };
+    $('btnCloseAvatar').onclick = closeModal;
+  }
+
+  function pickAvatarFile() {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = 'image/*';
+    inp.onchange = function () { if (inp.files && inp.files[0]) setAvatarFromFile(inp.files[0]); };
+    inp.click();
+  }
+
+  function resetAvatar() {
+    var st = loadSettings();
+    if (!st.myAvatarKey && st.myEmoji === '🐋') return;
+    if (!confirm('恢复默认头像？')) return;
+    clearAvatar(st.myAvatarKey);
+    st.myAvatarKey = null;
+    st.myEmoji = '🐋';
+    saveSettings(st);
+    if (game) {
+      game.settings = st;
+      game.players[0].avatar = '🐋';
+    }
+    renderSeats();
+  }
+
+  function placeSeat(el, idx, n) {
+    var theta = (idx / n) * Math.PI * 2;
+    el.style.left = (50 + 42 * Math.sin(theta)) + '%';
+    el.style.top = (50 + 28 * Math.cos(theta)) + '%';
+  }
+
+  function buildSeats() {
+    var wrap = $('seats');
+    wrap.innerHTML = '';
+    seatEls = [];
+    game.players.forEach(function (p, i) {
+      var el = document.createElement('div');
+      el.className = 'seat' + (p.id === 0 ? ' me' : '');
+      el.innerHTML =
+        '<div class="hole-row"></div>' +
+        '<div class="avatar-row">' +
+          '<div class="avatar"></div>' +
+          '<div><div class="who"></div><div class="chips"></div></div>' +
+        '</div>' +
+        '<div class="folded-mark" style="display:none">已弃牌</div>' +
+        '<div class="bubble"></div>' +
+        '<div class="bet-pill" style="display:none"></div>' +
+        '<div class="dealer-btn" style="display:none">D</div>';
+      wrap.appendChild(el);
+      placeSeat(el, i, game.players.length);
+      function q(sel) { return el.querySelector(sel); }
+      seatEls[p.id] = {
+        root: el, hole: q('.hole-row'), avatar: q('.avatar'),
+        who: q('.who'), chips: q('.chips'), foldedMark: q('.folded-mark'),
+        bubble: q('.bubble'), bet: q('.bet-pill'), dealer: q('.dealer-btn')
+      };
+      if (p.id === 0) {
+        var av = seatEls[p.id].avatar;
+        av.classList.add('mine');
+        av.title = '点一下换头像，右键恢复默认';
+        av.onclick = pickAvatar;
+        av.oncontextmenu = function (e) { e.preventDefault(); resetAvatar(); };
+      }
+    });
+  }
+
+  function renderSeats() {
+    game.players.forEach(function (p) {
+      var s = seatEls[p.id];
+      if (!s) return;
+      var url = p.id === 0 ? avatarDataUrl(game.settings && game.settings.myAvatarKey) : null;
+      var cur = s.avatar.getAttribute('data-src') || '';
+      if (url) {
+        if (cur !== url) {
+          s.avatar.innerHTML = '<img src="' + url + '" alt="">';
+          s.avatar.setAttribute('data-src', url);
+        }
+      } else {
+        if (cur) {
+          s.avatar.innerHTML = '';
+          s.avatar.removeAttribute('data-src');
+        }
+        s.avatar.textContent = p.avatar;
+      }
+      s.avatar.className = 'avatar' + (p.id === 0 ? ' mine' : '') +
+        (game.activeSeat === p.id ? ' active' : '') + (p.folded ? ' out' : '');
+      s.who.textContent = p.name;
+      s.chips.textContent = p.chips;
+      s.foldedMark.style.display = p.folded ? 'block' : 'none';
+      s.dealer.style.display = game.buttonSeat === p.id ? 'flex' : 'none';
+      s.bet.style.display = p.streetBet > 0 ? 'block' : 'none';
+      s.bet.textContent = p.streetBet;
+
+      var hole = s.hole;
+      hole.innerHTML = '';
+      if (p.id === 0) {
+        p.hole.forEach(function (c) { hole.appendChild(cardEl(c, false)); });
+      } else if (p.holeRevealed) {
+        p.hole.forEach(function (c) { hole.appendChild(cardEl(c, true)); });
+      } else if (!p.folded && p.hole.length) {
+        p.hole.forEach(function () { hole.appendChild(cardEl({ hidden: true }, true)); });
+      }
+    });
+  }
+
+  // ---------------- 起手牌参考 ----------------
+  var OPEN_RANGES = {
+    UTG: '对子 55+，ATs+，KQs，AJo+。最紧的位置：后面还有四个人没说话。',
+    MP: '对子 44+，A9s+，KJs+，QJs，ATo+。',
+    CO: '对子 22+，A7s+，K9s+，QTs+，JTs，T9s，ATo+，KJo+。位置好，可以放宽。',
+    BTN: '对子 22+，A2s+，K5s+，Q8s+，J8s+，T8s+，98s+，A7o+，KTo+。按钮位最松。',
+    SB: '对子 22+，A2s+，K7s+，Q9s+，J9s+，T9s，A9o+，KJo+。翻后没位置，别太松。',
+    BB: '防守范围：对子 22+，A2s+，K9s+，Q9s+，J9s+，T9s，A8o+。已经投了盲注，价格合适就守。'
+  };
+
+  var HU_RANGES = {
+    'BTN/SB': '单挑按钮（兼小盲）：对子 22+，A2s+，K2s+，Q5s+，J7s+，T7s+，A2o+，K7o+。单挑要打得很松。',
+    'BB': '单挑大盲：对子 22+，A2s+，K5s+，Q8s+，J8s+，T8s+，A7o+。翻前对手先说话，翻后你先说话。'
+  };
+
+  function rangeFor() {
+    var key = posLabel(0);
+    var map = game.mode === 'hu' ? HU_RANGES : OPEN_RANGES;
+    return map[key] || '';
+  }
+
+  function render() {
+    var me = game.players[0];
+
+    // 顶栏
+    $('topChips').textContent = me.chips;
+    $('topHands').textContent = game.handsPlayed;
+    $('topRebuys').textContent = game.rebuys;
+    $('topBlinds').textContent = game.smallBlind + ' / ' + game.bigBlind;
+
+    // 座位
+    renderSeats();
+
+    // 公共牌
+    var board = $('board'); board.innerHTML = '';
+    for (var i = 0; i < 5; i++) board.appendChild(cardEl(game.board[i], false));
+
+    $('potValue').textContent = game.pot;
+    $('streetLabel').textContent = game.handOver ? '本手结束' : (game.streetLabel || '等待开局');
+
+    // 信息面板
+    $('infoPos').textContent = posLabel(0);
+    var toCall = game.streetCurrentBet - me.streetBet;
+    $('infoToCall').textContent = game.handOver ? '—' : Math.max(0, toCall);
+    var need = (!game.handOver && toCall > 0) ? Math.round(toCall / (game.pot + toCall) * 100) : 0;
+    $('infoOdds').textContent = need > 0 ? need + '%' : '—';
+    $('infoStrength').textContent = me.hole.length ? Math.round(preflopScore(me.hole) * 100) + '%' : '—';
+    $('handTip').textContent = (!game.handOver && game.street === 'preflop')
+      ? (rangeFor() || '—')
+      : '翻牌后看公共牌与底池赔率，不再套起手牌表。';
+
+    // 日志
+    var log = $('log'); log.innerHTML = '';
+    game.log.forEach(function (l) {
+      var d = document.createElement('div');
+      d.className = 'l';
+      d.textContent = l.text;
+      log.appendChild(d);
+    });
+    log.scrollTop = log.scrollHeight;
+
+    renderActions();
+  }
+
+  function mkBtn(label, cls, fn, disabled) {
+    var b = document.createElement('button');
+    b.className = 'btn ' + cls;
+    b.textContent = label;
+    if (disabled) b.disabled = true;
+    b.onclick = fn;
+    return b;
+  }
+
+  function renderActions() {
+    var box = $('actionButtons');
+    box.innerHTML = '';
+    $('oddsHint').textContent = '';
+
+    if (game.handOver) {
+      $('actionHint').textContent = '这一手结束了';
+      box.appendChild(mkBtn('下一手', 'raise', function () { nextHand(); }));
+      return;
+    }
+    if (game.activeSeat !== 0) {
+      $('actionHint').textContent = busy ? '对手思考中…' : '等待对手行动…';
+      return;
+    }
+    var me = game.players[0];
+    var toCall = game.streetCurrentBet - me.streetBet;
+    var acts = E.legalActionsFor(game, 0);
+    var canRaise = acts.some(function (a) { return a.type === 'raise'; });
+    var canAllin = acts.some(function (a) { return a.type === 'allin'; });
+
+    $('actionHint').textContent = toCall > 0 ? ('要跟 ' + Math.min(toCall, me.chips)) : '可以过牌或下注';
+
+    // 底池赔率提示
+    if (toCall > 0) {
+      var need = toCall / (game.pot + toCall);
+      $('oddsHint').textContent = '跟注 ' + Math.min(toCall, me.chips) + '，跟注前底池 ' + game.pot +
+        ' → 需要 ' + Math.round(need * 100) + '% 胜率';
+    }
+
+    box.appendChild(mkBtn('弃牌', 'fold', function () { doAct({ type: 'fold' }); }));
+    if (toCall <= 0) {
+      box.appendChild(mkBtn('过牌', 'check', function () { doAct({ type: 'check' }); }));
+    } else {
+      box.appendChild(mkBtn('跟注 ' + Math.min(toCall, me.chips), 'call', function () { doAct({ type: 'call' }); }));
+    }
+
+    if (canRaise) {
+      var raiseAct = acts.filter(function (a) { return a.type === 'raise'; })[0];
+      raiseValue = Math.min(Math.max(raiseValue, raiseAct.min), raiseAct.max);
+
+      var panel = document.createElement('div');
+      panel.className = 'raise-panel';
+
+      var slider = document.createElement('input');
+      slider.type = 'range';
+      slider.min = raiseAct.min;
+      slider.max = raiseAct.max;
+      slider.step = 1;
+      slider.value = raiseValue;
+
+      var amt = document.createElement('span');
+      amt.className = 'amt';
+      amt.textContent = raiseValue;
+
+      slider.oninput = function () { raiseValue = +slider.value; amt.textContent = raiseValue; };
+      panel.appendChild(slider);
+      panel.appendChild(amt);
+
+      var raiseBtn = mkBtn('加注到 ' + raiseValue, 'raise', function () {
+        doAct({ type: 'raise', amount: +slider.value });
+      });
+      raiseBtn._amt = amt;
+      raiseBtn._upd = function () { raiseBtn.textContent = '加注到 ' + raiseValue; };
+      slider.addEventListener('input', function () { raiseBtn._upd(); });
+      box.appendChild(raiseBtn);
+      box.appendChild(panel);
+    }
+    if (canAllin) {
+      box.appendChild(mkBtn('全下 ' + (me.streetBet + me.chips), 'allin', function () { doAct({ type: 'allin' }); }));
+    }
+  }
+
+  // ---------------- 玩家动作 ----------------
+  function doAct(action) {
+    if (game.handOver || game.activeSeat !== 0) return;
+    try {
+      E.act(game, 0, action);
+    } catch (err) {
+      console.error(err);
+      return;
+    }
+    render();
+    if (game.handOver) onHandEnd();
+    else scheduleAI();
+  }
+
+  // ---------------- 行动消息 ----------------
+  var messages = [];
+
+  var MSG_POOL = {
+    fold: ['这手打不了', '位置太差，下次', '不跟了', '算了'],
+    call: ['跟一个', '看看牌', '陪你', '行吧'],
+    check: ['过牌', '我不下', '看看'],
+    raise: ['加点压力', '来试试', '加注', '想加就加'],
+    allin: ['全下了', '拼一把', '就这些了']
+  };
+
+  function pushMessage(seat, action) {
+    var enabled = !game.settings || game.settings.messageEnabled !== false;
+    if (!enabled || seat === 0) return;
+    var key = action.type;
+    var pool = MSG_POOL[key];
+    if (!pool) return;
+    var text = pool[Math.floor(Math.random() * pool.length)];
+    messages.push({
+      id: 'msg-' + (messages.length + 1),
+      speakerId: seat,
+      actionIndex: game.actions.length - 1,
+      type: 'action',
+      text: text,
+      createdAt: Date.now(),
+      templateKey: key
+    });
+    showBubble(seat, text);
+  }
+
+  function showBubble(seat, text) {
+    var s = seatEls[seat];
+    if (!s) return;
+    s.bubble.textContent = text;
+    s.bubble.classList.add('show');
+    clearTimeout(s._bt);
+    s._bt = setTimeout(function () { s.bubble.classList.remove('show'); }, 2200);
+  }
+
+  // ---------------- AI ----------------
+  var AI_PROFILE = {
+    easy:   { call: 0.26, raise: 0.78, bluff: 0.00, size: 0.45 },
+    normal: { call: 0.34, raise: 0.68, bluff: 0.05, size: 0.60 },
+    hard:   { call: 0.38, raise: 0.62, bluff: 0.13, size: 0.70 }
+  };
+
+  function preflopScore(hole) {
+    // Chen formula 归一化到 0..1
+    var a = Math.max(hole[0].r, hole[1].r);
+    var b = Math.min(hole[0].r, hole[1].r);
+    var suited = hole[0].s === hole[1].s;
+    var highScore = { 14: 10, 13: 8, 12: 7, 11: 6, 10: 5 }[a] || (a / 2);
+    var score = highScore;
+    if (a === b) score = Math.max(5, highScore * 2);
+    if (suited) score += 2;
+    var gap = a - b;
+    if (a !== b) {
+      if (gap === 1) score += 1;
+      else if (gap === 2) score -= 1;
+      else if (gap === 3) score -= 2;
+      else if (gap === 4) score -= 4;
+      else score -= 5;
+    }
+    if (score < 0 && gap <= 4) score = 0;
+    return Math.max(0, Math.min(1, (score + 1) / 21));
+  }
+
+  function postflopScore(hole, board) {
+    var v = E.eval7(hole.concat(board));
+    var base = [0.08, 0.32, 0.52, 0.68, 0.78, 0.84, 0.9, 0.96, 1.0][v[0]];
+    return base;
+  }
+
+  function aiDecide(g, seat) {
+    var p = g.players[seat];
+    var cfg = AI_PROFILE[g.aiLevel] || AI_PROFILE.normal;
+    var acts = E.legalActionsFor(g, seat);
+    var toCall = g.streetCurrentBet - p.streetBet;
+    var raiseAct = acts.filter(function (a) { return a.type === 'raise'; })[0];
+    var canRaise = !!raiseAct;
+    var canCheck = acts.some(function (a) { return a.type === 'check'; });
+
+    var strength = g.street === 'preflop'
+      ? preflopScore(p.hole)
+      : postflopScore(p.hole, g.board);
+
+    // 剩余玩家越多，同样牌力越要收紧
+    var alive = g.players.filter(function (x) { return !x.folded; }).length;
+    // 位置修正：越靠后（按钮）越敢玩，前面位置收紧
+    var posBonus = 0;
+    if (g.mode === 'six') {
+      var rel = (seat - g.buttonSeat + 6) % 6; // 0=BTN 1=SB 2=BB 3=UTG 4=MP 5=CO
+      posBonus = [0.10, 0.00, 0.03, -0.10, -0.05, 0.02][rel] || 0;
+    }
+    var adj = strength + posBonus - (alive - 2) * 0.02;
+
+    function raiseTo(frac) {
+      if (!canRaise) return toCall > 0 ? { type: 'call' } : { type: 'check' };
+      var target = Math.round((g.pot + toCall) * frac + g.streetCurrentBet);
+      target = Math.max(raiseAct.min, Math.min(raiseAct.max, target));
+      return { type: 'raise', amount: target };
+    }
+
+    // 强牌：主动做大
+    if (adj > cfg.raise) {
+      if (canRaise) return raiseTo(cfg.size);
+      return toCall > 0 ? { type: 'call' } : { type: 'check' };
+    }
+    // 中等牌：按赔率跟，偶尔主动下注
+    if (adj > cfg.call) {
+      if (toCall <= 0) {
+        if (canRaise && Math.random() < 0.3) return raiseTo(cfg.size * 0.7);
+        return { type: 'check' };
+      }
+      var need = toCall / (g.pot + toCall);
+      if (need <= cfg.call + 0.06) return { type: 'call' };
+      return { type: 'fold' };
+    }
+    // 诈唬：牌力弱、代价小时偷池
+    if (Math.random() < cfg.bluff && toCall <= g.pot * 0.3) {
+      if (canRaise) return raiseTo(cfg.size);
+      if (canCheck) return { type: 'check' };
+    }
+    if (toCall <= 0) return { type: 'check' };
+    // 老手面对小注会多跟一张
+    if (g.aiLevel === 'hard' && toCall <= g.bigBlind * 2) return { type: 'call' };
+    return { type: 'fold' };
+  }
+
+  function scheduleAI() {
+    if (game.handOver) return;
+    var seat = game.activeSeat;
+    if (seat < 0 || seat === 0) return;
+    busy = true;
+    render();
+    setTimeout(function () {
+      if (game.handOver || game.activeSeat !== seat) { busy = false; render(); return; }
+      var action;
+      try { action = aiDecide(game, seat); } catch (e) { action = { type: 'fold' }; }
+      try { E.act(game, seat, action); } catch (e) { console.error(e); }
+      pushMessage(seat, action);
+      busy = false;
+      render();
+      if (game.handOver) onHandEnd();
+      else scheduleAI();
+    }, 420 + Math.random() * 380);
+  }
+
+  // ---------------- 一手结束 ----------------
+  function onHandEnd() {
+    if (resultShown) return;
+    resultShown = true;
+    saveHand();
+    saveSettings({ chips: game.players[0].chips, hands: game.handsPlayed, rebuys: game.rebuys });
+    showResult();
+  }
+
+  function nextHand() {
+    resultShown = false;
+    messages = [];
+    try {
+      E.nextHand(game);
+    } catch (e) {
+      game = null;
+      newGame();
+      return;
+    }
+    syncRebuyEvents();
+    render();
+    scheduleAI();
+  }
+
+  var rebuySynced = 0;
+
+  function syncRebuyEvents() {
+    var evs = (game && game.rebuyEvents) || [];
+    if (evs.length <= rebuySynced) return;
+    var s = LS.get('poker.session.v2', null);
+    if (!s || !Array.isArray(s.events)) s = { schemaVersion: 2, events: [] };
+    for (var i = rebuySynced; i < evs.length; i++) s.events.push(evs[i]);
+    LS.set('poker.session.v2', s);
+    rebuySynced = evs.length;
+  }
+
+  function saveHand() {
+    var hands = LS.get('poker.hands.v2', []);
+    if (!Array.isArray(hands)) hands = [];
+    hands.push({
+      schemaVersion: 2,
+      id: game.handId,
+      time: Date.now(),
+      seed: game.seed,
+      deckState: game.deckState,
+      board: game.board,
+      players: game.players.map(function (p) {
+        return {
+          id: p.id, name: p.name, seat: p.seat, hole: p.hole,
+          finalChips: p.chips, folded: p.folded, totalBet: p.totalBet
+        };
+      }),
+      buttonSeat: game.buttonSeat,
+      blinds: { sb: game.smallBlind, bb: game.bigBlind },
+      actions: game.actions,
+      sidePots: game.sidePots,
+      result: game.result,
+      review: buildReview(),
+      messages: messages.slice()
+    });
+    if (hands.length > 200) hands = hands.slice(hands.length - 200);
+    LS.set('poker.hands.v2', hands);
+  }
+
+  // ---------------- 弹层 ----------------
+  function openModal(html) {
+    $('modal').innerHTML = html;
+    $('overlay').classList.add('show');
+  }
+  function closeModal() {
+    $('overlay').classList.remove('show');
+    if (typeof replayTimer !== 'undefined' && replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  }
+
+  // ---------------- 复盘讲评 ----------------
+  var CAT_STRENGTH = [0.15, 0.35, 0.55, 0.70, 0.78, 0.85, 0.92, 0.96, 0.99];
+  var VERDICT_CN = { good: '不错', ok: '可接受', mistake: '有问题' };
+  var STREET_CN = { preflop: '翻前', flop: '翻牌', turn: '转牌', river: '河牌' };
+
+  function pct(x) { return Math.round(x * 100) + '%'; }
+
+  function handStrengthAt(rec, hole) {
+    if (rec.street === 'preflop' || !rec.board || rec.board.length < 3) return preflopScore(hole);
+    return CAT_STRENGTH[E.eval7(hole.concat(rec.board))[0]];
+  }
+
+  function buildReview() {
+    var me = game.players[0];
+    var out = [];
+    game.actions.forEach(function (rec, i) {
+      if (rec.playerId !== 0) return;
+      var strength = handStrengthAt(rec, me.hole);
+      var toCall = rec.toCallBefore || 0;
+      var pot = rec.potBefore || 0;
+      var potOdds = toCall > 0 ? toCall / (pot + toCall) : 0;
+      var bb = game.bigBlind;
+      var verdict = 'ok';
+      var suggested = rec.type;
+      var text = '';
+
+      if (rec.street === 'preflop') {
+        if (rec.type === 'fold') {
+          if (strength >= 0.60) {
+            verdict = 'mistake'; suggested = 'raise';
+            text = '这手牌力约 ' + pct(strength) + '，翻前直接弃掉太可惜，应该加注。';
+          } else if (toCall <= bb) {
+            if (strength < 0.18) {
+              verdict = 'good'; suggested = 'fold';
+              text = '牌力约 ' + pct(strength) + '，花 ' + toCall + ' 看翻牌也不划算，弃掉是对的。';
+            } else if (strength >= 0.45) {
+              verdict = 'ok'; suggested = 'call';
+              text = '只花 ' + toCall + ' 就能看翻牌，牌力约 ' + pct(strength) + '，跟一手更划算。';
+            } else {
+              verdict = 'ok'; suggested = 'fold';
+              text = '牌力约 ' + pct(strength) + '，这个价可跟可弃，不算错。';
+            }
+          } else {
+            verdict = strength >= 0.50 ? 'mistake' : 'good';
+            suggested = strength >= 0.50 ? 'call' : 'fold';
+            text = strength >= 0.50
+              ? '牌力约 ' + pct(strength) + '，面对 ' + toCall + ' 的加注不该直接丢。'
+              : '面对 ' + toCall + ' 的加注，这手不够跟。';
+          }
+        } else if (rec.type === 'call' && toCall > bb * 3) {
+          if (strength < 0.35) {
+            verdict = 'mistake'; suggested = 'fold';
+            text = '跟 ' + toCall + '（约 ' + Math.round(toCall / bb) + ' 个大盲）太贵，牌力只有约 ' + pct(strength) + '。';
+          } else {
+            text = '跟 ' + toCall + ' 合理。';
+          }
+        } else if (rec.type === 'raise' || rec.type === 'allin') {
+          if (strength < 0.40) {
+            verdict = 'mistake'; suggested = 'fold';
+            text = '牌力约 ' + pct(strength) + '，翻前主动加注偏凶。';
+          } else {
+            text = '翻前主动加注，牌力撑得住。';
+          }
+        } else {
+          text = '翻前看牌，标准打法。';
+        }
+      } else {
+        if (rec.type === 'fold') {
+          if (potOdds > 0 && strength >= potOdds + 0.10) {
+            verdict = 'mistake'; suggested = 'call';
+            text = '底池赔率只要 ' + pct(potOdds) + '，你的牌约 ' + pct(strength) + '，这次弃牌太紧。';
+          } else if (potOdds > 0) {
+            verdict = 'good';
+            text = '需要 ' + pct(potOdds) + ' 胜率，你的牌约 ' + pct(strength) + '，弃掉是对的。';
+          } else {
+            text = '面对下注弃牌。';
+          }
+        } else if (rec.type === 'call') {
+          if (strength < potOdds - 0.10) {
+            verdict = 'mistake'; suggested = 'fold';
+            text = '跟注需要 ' + pct(potOdds) + ' 胜率，你的牌约 ' + pct(strength) + '，这一跟是亏的。';
+          } else {
+            text = '跟注需要 ' + pct(potOdds) + '，你的牌约 ' + pct(strength) + '，赔率站得住。';
+          }
+        } else if (rec.type === 'raise' || rec.type === 'allin') {
+          if (toCall > 0 && strength < potOdds - 0.10) {
+            verdict = 'mistake'; suggested = 'fold';
+            text = '加注时牌力约 ' + pct(strength) + '，低于所需 ' + pct(potOdds) + '，偏冒险。';
+          } else if (toCall === 0 && strength < 0.35) {
+            text = '用弱牌（约 ' + pct(strength) + '）主动下注，属于诈唬，不算错，但要控制频率。';
+          } else {
+            text = '主动下注，牌力与底池匹配。';
+          }
+        } else if (rec.type === 'check') {
+          text = '过牌看下一张。';
+        }
+      }
+
+      out.push({
+        actionIndex: i,
+        street: rec.street,
+        type: rec.type,
+        verdict: verdict,
+        suggestedAction: suggested,
+        assumptions: {
+          opponentRange: '未建模（只按自己牌力估）',
+          potOdds: potOdds,
+          effectiveStack: rec.amountBefore || 0
+        },
+        text: '<b>' + (STREET_CN[rec.street] || rec.street) + '</b> ' + text
+      });
+    });
+    return out;
+  }
+
+  function showResult() {
+    var me = game.players[0];
+    var r = game.result;
+    var html = '<h3>本手结算</h3>';
+    html += '<div class="row"><span>公共牌</span><span>' +
+      (game.board.length ? game.board.map(E.cardStr).join(' ') : '（未发）') + '</span></div>';
+    html += '<div class="row"><span>你的手牌</span><span>' +
+      me.hole.map(E.cardStr).join(' ') + (me.folded ? '（已弃牌）' : '') + '</span></div>';
+    if (r && r.showdown) {
+      game.players.forEach(function (p) {
+        if (p.id === 0 || p.folded) return;
+        html += '<div class="row"><span>' + p.name + ' 手牌</span><span>' +
+          p.hole.map(E.cardStr).join(' ') + '</span></div>';
+      });
+    }
+    if (r && r.winners) {
+      r.winners.forEach(function (w) {
+        var nm = game.players[w.playerId].name;
+        html += '<div class="row"><span>' + nm + '</span><span class="win">+' + w.amount + '（' + (w.reason || '') + '）</span></div>';
+      });
+    }
+    html += '<div class="row"><span>你的筹码</span><span>' + me.chips + '</span></div>';
+
+    // 复盘讲评
+    var review = buildReview();
+    if (review.length) {
+      html += '<div class="review-title">复盘讲评</div>';
+      review.forEach(function (rv) {
+        html += '<div class="review-item ' + rv.verdict + '">' +
+          '<span class="rv-tag">' + (VERDICT_CN[rv.verdict] || '') + '</span>' +
+          '<div class="rv-text">' + rv.text + '</div>' +
+          '<div class="rv-assume">底池赔率 ' + pct(rv.assumptions.potOdds) +
+          ' · 假设：' + rv.assumptions.opponentRange + '</div></div>';
+      });
+    } else {
+      html += '<div class="note">这一手你没有做决策（直接弃牌或没轮到）。</div>';
+    }
+
+    html += '<div class="note">牌谱已记录。点「下一手」继续。</div>';
+    html += '<div class="actions"><button class="btn raise" id="btnNextHand">下一手</button></div>';
+    openModal(html);
+    $('btnNextHand').onclick = function () { closeModal(); nextHand(); };
+  }
+
+  // ---------------- 新手教学 ----------------
+  function cardHtml(c) {
+    var cls = 'card small';
+    if (c.s === 'h' || c.s === 'd') cls += ' red';
+    return '<div class="' + cls + '"><span class="rk">' + E.RANK_SYM[c.r] +
+      '</span><span class="su">' + E.SUIT_SYM[c.s] + '</span></div>';
+  }
+
+  function guideStep(n, title, text) {
+    return '<div class="guide-step"><div class="guide-num">' + n + '</div>' +
+      '<div><b>' + title + '</b>　' + text + '</div></div>';
+  }
+
+  function guideFlow() {
+    var sb = game ? game.smallBlind : 10;
+    var bb = game ? game.bigBlind : 20;
+    return '' +
+      '<h4>一句话目标</h4>' +
+      '<p>用你的两张底牌，加上桌面上五张公共牌，凑出<b>最强的五张牌</b>。比对手强就赢下底池。</p>' +
+      '<h4>一手牌怎么走</h4>' +
+      guideStep(1, '发底牌', '每人两张，只有自己看得到。') +
+      guideStep(2, '翻前', '桌面还没牌。从大盲左边第一个人开始，依次决定玩不玩。') +
+      guideStep(3, '翻牌', '发三张公共牌。这一轮从按钮左边第一个人开始。') +
+      guideStep(4, '转牌', '发第四张公共牌。') +
+      guideStep(5, '河牌', '发第五张公共牌，最后一轮下注。') +
+      guideStep(6, '比牌', '还有两个人以上没弃牌就亮牌比大小；只剩一个人，他直接赢。') +
+      '<h4>盲注是什么</h4>' +
+      '<p>按钮左边两个人必须先在不知道牌的情况下放钱：小盲 <b>' + sb +
+      '</b>、大盲 <b>' + bb + '</b>。这不是白花的，它保证每一手都有东西可赢，也逼着人不能一直干等。</p>' +
+      '<h4>位置</h4>' +
+      '<p>桌上写着 <b>D</b> 的圆片是按钮位，每手顺时针挪一格。</p>' +
+      '<p>按钮位<b>最后行动</b>：你能先看别人怎么做，再决定自己怎么做。同样的牌，在按钮位比在枪口位值钱得多。</p>';
+  }
+
+  var HAND_RANKS = [
+    { name: '皇家同花顺', cards: [[14, 's'], [13, 's'], [12, 's'], [11, 's'], [10, 's']], tip: '同花色的 A K Q J 10，最大的牌' },
+    { name: '同花顺', cards: [[9, 'h'], [8, 'h'], [7, 'h'], [6, 'h'], [5, 'h']], tip: '五张连续的同花色牌' },
+    { name: '四条', cards: [[12, 'c'], [12, 'd'], [12, 'h'], [12, 's'], [7, 'c']], tip: '四张一样的点数' },
+    { name: '葫芦', cards: [[11, 's'], [11, 'd'], [11, 'c'], [4, 'h'], [4, 's']], tip: '三条 + 一对，也叫满堂红' },
+    { name: '同花', cards: [[14, 'd'], [11, 'd'], [8, 'd'], [5, 'd'], [2, 'd']], tip: '五张同一花色，不用连续' },
+    { name: '顺子', cards: [[10, 'c'], [9, 'd'], [8, 's'], [7, 'h'], [6, 'c']], tip: '五张连续点数，花色可以不同' },
+    { name: '三条', cards: [[8, 's'], [8, 'd'], [8, 'c'], [13, 'h'], [3, 's']], tip: '三张一样的点数' },
+    { name: '两对', cards: [[14, 'c'], [14, 's'], [9, 'd'], [9, 'h'], [5, 'c']], tip: '两个对子' },
+    { name: '一对', cards: [[13, 's'], [13, 'h'], [12, 'd'], [7, 'c'], [3, 's']], tip: '两张一样的点数' },
+    { name: '高牌', cards: [[14, 's'], [12, 'd'], [9, 'c'], [6, 'h'], [3, 's']], tip: '什么组合都没有，比单张大小' }
+  ];
+
+  function guideHands() {
+    var html = '<h4>十种牌型，从上到下越来越小</h4>';
+    html += '<p>比牌时先看牌型；牌型一样，比组成它的点数；还一样，比剩下的散牌。</p>';
+    HAND_RANKS.forEach(function (h, i) {
+      html += '<div class="hand-rank-row">' +
+        '<div class="hand-rank-name">' + h.name + '</div>' +
+        '<div class="hand-rank-cards">' +
+        h.cards.map(function (c) { return cardHtml({ r: c[0], s: c[1] }); }).join('') +
+        '</div>' +
+        '<div class="hand-rank-tip">' + h.tip + '</div>' +
+        '</div>';
+    });
+    html += '<h4>容易搞混的两点</h4>' +
+      '<p><b>同花 vs 顺子</b>：同花比顺子大。但如果花色凑不成，光连续点数只能算顺子。</p>' +
+      '<p><b>A 的两头</b>：A 可以接 K Q J 10（最大顺子），也可以接 2 3 4 5（最小顺子，叫轮子）。但 A 不能跨过去接 K 和 2。</p>';
+    return html;
+  }
+
+  function guideActions() {
+    return '' +
+      '<h4>轮到你时有五个选择</h4>' +
+      guideStep('弃', '弃牌', '不玩了，已经投进去的钱拿不回来。牌太差就弃，别舍不得。') +
+      guideStep('过', '过牌', '不投钱，把决定权交给下一个人。只有前面没人下注时才能过牌。') +
+      guideStep('跟', '跟注', '掏出和当前注一样多的钱，继续玩。') +
+      guideStep('加', '加注', '在别人下注的基础上再加钱，逼对方要么跟更多、要么弃牌。') +
+      guideStep('全', '全下', '把面前所有筹码推出去。要么赢走整个底池，要么出局（会自动补码）。') +
+      '<h4>什么时候选哪个</h4>' +
+      '<p><b>牌差、位置差、成本高</b>：弃掉。一手牌的损失远小于跟一晚上差牌。</p>' +
+      '<p><b>牌中等、价格便宜</b>：跟注看牌，别加注把自己套进去。</p>' +
+      '<p><b>牌强</b>：加注。只跟注会让对手便宜看牌，反而容易被反超。</p>' +
+      '<p><b>诈唬</b>：牌不强但想装强，靠加注把对手吓走。频率要低，被跟就认了。</p>';
+  }
+
+  function guideTerms() {
+    var terms = [
+      ['3-bet', '别人加注之后，你再加注。翻前的大盲再加注也算。'],
+      ['c-bet', '翻前加注的人，翻牌后继续下注。用来延续“我有强牌”的故事。'],
+      ['outs', '还能让你反超的牌有几张。比如手里两张同花、翻牌又出两张同花，还剩 9 张同花能救你。'],
+      ['听牌', '还差一张就成牌的状态。听同花、听顺子都算，是“现在不强但潜力大”。'],
+      ['领先 / 落后', '现在谁更大。领先就拿价值，落后就算赔率。'],
+      ['位置优势', '后行动的人信息多。按钮位是全场最好的位置。'],
+      ['底池赔率', '跟注额 ÷（跟注前底池 + 跟注额）。右侧面板的“所需胜率”就是它。'],
+      ['有效筹码', '两个人里较少的那个筹码量。它决定这手牌最多能赢多少、值不值得为一个听牌全下。']
+    ];
+    var html = '<h4>这游戏里常听到的词</h4>';
+    terms.forEach(function (t) {
+      html += '<div class="term-row"><div class="term-name">' + t[0] + '</div><div>' + t[1] + '</div></div>';
+    });
+    return html;
+  }
+
+  function guideStrategy() {
+    return '' +
+      '<h4>1. 起手牌：位置越靠后，能玩的牌越多</h4>' +
+      '<p>枪口位（UTG）只玩强牌：大对子、AK、AQ。中间位置稍微放宽一点。</p>' +
+      '<p>按钮位可以玩得最松：小对子、同花连牌、A 带小同花都行——因为你最后行动。</p>' +
+      '<p><b>记住一句话</b>：前位紧、后位松。反过来的话，你会一直在没位置的情况下打边缘牌。</p>' +
+      '<h4>2. 下注尺度：别乱加</h4>' +
+      '<p>翻前加注通常 <b>2.5～3 个大盲</b>。翻后下注通常<b>半个到一整个底池</b>。</p>' +
+      '<p>下注太小给对手便宜的赔率，太大又只有比你强的牌会跟。固定一个尺度，别让对手从下注额读出你的牌。</p>' +
+      '<h4>3. 什么时候该弃牌</h4>' +
+      '<p>看右侧的「所需胜率」。比如跟注要 25%，你手里只有一手没成型的听牌、估算不到 25%，就该弃。</p>' +
+      '<p>反过来，如果对方只下了一个很小的注、你只需要 10% 胜率，那就值得跟——哪怕你现在落后。</p>' +
+      '<h4>4. 位置为什么值钱</h4>' +
+      '<p>后行动意味着：别人过牌你可以下注，别人下注你可以决定跟不跟，翻牌后每个决定都多一层信息。</p>' +
+      '<p>同样的牌，在按钮位赢的钱往往比在枪口位多，不是因为牌变好了，是因为你少犯错。</p>' +
+      '<h4>5. 上一手发生了什么，去复盘里看</h4>' +
+      '<p>每手结束都会给你逐条点评。别只看输赢——<b>输了但打对了</b>，比<b>赢了但打错了</b>更值得记住。</p>';
+  }
+
+  var GUIDE_TAB = 'flow';
+
+  function showGuide(tab) {
+    if (tab) GUIDE_TAB = tab;
+    var tabs = [
+      ['flow', '怎么玩'], ['hands', '牌型'], ['actions', '行动'],
+      ['terms', '术语'], ['strategy', '策略']
+    ];
+    var bodies = {
+      flow: guideFlow, hands: guideHands, actions: guideActions,
+      terms: guideTerms, strategy: guideStrategy
+    };
+    var html = '<h3>新手教学</h3><div class="guide-tabs">';
+    tabs.forEach(function (t) {
+      html += '<button class="guide-tab' + (t[0] === GUIDE_TAB ? ' on' : '') +
+        '" data-tab="' + t[0] + '">' + t[1] + '</button>';
+    });
+    html += '</div><div class="guide-body">' + (bodies[GUIDE_TAB] || guideFlow)() + '</div>';
+    html += '<div class="actions"><button class="btn check" id="btnCloseGuide">知道了</button></div>';
+    openModal(html);
+    $('btnCloseGuide').onclick = closeModal;
+    Array.prototype.forEach.call(document.querySelectorAll('.guide-tab'), function (b) {
+      b.onclick = function () { showGuide(b.getAttribute('data-tab')); };
+    });
+    var body = document.querySelector('.guide-body');
+    if (body && body.parentNode) body.parentNode.scrollTop = 0;
+  }
+
+  // ---------------- 统计 ----------------
+  function handNet(h) {
+    var me = (h.players || []).filter(function (p) { return p.id === 0; })[0];
+    if (!me) return 0;
+    var won = 0;
+    ((h.result && h.result.winners) || []).forEach(function (w) {
+      if (w.playerId === 0) won += w.amount;
+    });
+    return won - (me.totalBet || 0);
+  }
+
+  function handPos(h) {
+    var me = (h.players || []).filter(function (p) { return p.id === 0; })[0];
+    if (!me || typeof h.buttonSeat !== 'number') return '?';
+    var n = (h.players || []).length;
+    if (n === 2) return me.seat === h.buttonSeat ? 'BTN/SB' : 'BB';
+    var rel = (me.seat - h.buttonSeat + n) % n;
+    var names = ['BTN', 'SB', 'BB', 'UTG', 'MP', 'CO', 'MP2', 'HJ', 'CO2'];
+    return names[rel] || ('#' + rel);
+  }
+
+  function computeStats() {
+    var hands = loadHands();
+    var st = { total: hands.length, vpip: 0, pfr: 0, win: 0, lose: 0, net: 0, curve: [], pos: {} };
+    var acc = 0;
+    hands.forEach(function (h) {
+      var pre = (h.actions || []).filter(function (a) {
+        return a.playerId === 0 && a.street === 'preflop';
+      });
+      var vol = pre.some(function (a) {
+        return a.type === 'call' || a.type === 'raise' || a.type === 'allin';
+      });
+      var raised = pre.some(function (a) {
+        return a.type === 'raise' || a.type === 'allin';
+      });
+      if (vol) st.vpip++;
+      if (raised) st.pfr++;
+      var net = handNet(h);
+      if (net > 0) st.win++; else if (net < 0) st.lose++;
+      st.net += net;
+      acc += net;
+      st.curve.push(acc);
+      var pos = handPos(h);
+      if (!st.pos[pos]) st.pos[pos] = { n: 0, net: 0 };
+      st.pos[pos].n++;
+      st.pos[pos].net += net;
+    });
+    return st;
+  }
+
+  function curveSvg(curve) {
+    if (!curve || curve.length < 2) return '<div class="empty-tip">打完两手以上才有曲线</div>';
+    var w = 480, h = 120, pad = 6;
+    var lo = Math.min.apply(null, curve.concat([0]));
+    var hi = Math.max.apply(null, curve.concat([0]));
+    if (hi === lo) hi = lo + 1;
+    var pts = curve.map(function (v, i) {
+      var x = pad + (w - pad * 2) * (i / (curve.length - 1));
+      var y = h - pad - (h - pad * 2) * ((v - lo) / (hi - lo));
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    var zero = h - pad - (h - pad * 2) * ((0 - lo) / (hi - lo));
+    return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" class="curve">' +
+      '<line x1="0" y1="' + zero.toFixed(1) + '" x2="' + w + '" y2="' + zero.toFixed(1) +
+      '" stroke="#3a4d44" stroke-dasharray="3 3"/>' +
+      '<polyline fill="none" stroke="#ffd479" stroke-width="2" points="' + pts + '"/>' +
+      '</svg>';
+  }
+
+  function statCell(label, value, tip) {
+    return '<div class="stat-cell"><div class="sc-label">' + label + '</div>' +
+      '<div class="sc-value">' + value + '</div>' +
+      '<div class="sc-tip">' + tip + '</div></div>';
+  }
+
+  function showStats() {
+    var st = computeStats();
+    if (!st.total) {
+      openModal('<h3>统计</h3><div class="empty-tip">还没有打完的牌局。</div>' +
+        '<div class="actions"><button class="btn check" id="btnCloseStats">关闭</button></div>');
+      $('btnCloseStats').onclick = closeModal;
+      return;
+    }
+    var html = '<h3>统计（最近 ' + st.total + ' 手）</h3>';
+    html += '<div class="stat-grid">' +
+      statCell('VPIP', Math.round(st.vpip / st.total * 100) + '%', '翻前主动投钱的手数占比') +
+      statCell('PFR', Math.round(st.pfr / st.total * 100) + '%', '翻前加注的手数占比') +
+      statCell('净盈亏', (st.net >= 0 ? '+' : '') + st.net, '按手累计，含盲注') +
+      statCell('赢 / 输', st.win + ' / ' + st.lose, '按每手净结果计') +
+      '</div>';
+    html += '<div class="review-title">盈亏曲线</div>' + curveSvg(st.curve);
+    html += '<div class="review-title">按位置</div>';
+    Object.keys(st.pos).forEach(function (k) {
+      html += '<div class="row"><span>' + k + '（' + st.pos[k].n + ' 手）</span><span>' +
+        (st.pos[k].net >= 0 ? '+' : '') + st.pos[k].net + '</span></div>';
+    });
+    html += '<div class="note">VPIP / PFR 只看翻前主动投入，被盲注逼着跟的不算。位置按发牌时的按钮位算。</div>';
+    html += '<div class="actions"><button class="btn check" id="btnCloseStats">关闭</button></div>';
+    openModal(html);
+    $('btnCloseStats').onclick = closeModal;
+  }
+
+  function showHistory() {
+    var hands = loadHands();
+    if (!Array.isArray(hands) || hands.length === 0) {
+      openModal('<h3>牌谱</h3><div class="empty-tip">还没有牌谱，先打几手吧。</div>' +
+        '<div class="actions"><button class="btn check" id="btnCloseModal">关闭</button></div>');
+      $('btnCloseModal').onclick = closeModal;
+      return;
+    }
+    var html = '<h3>牌谱（最近 ' + hands.length + ' 手）</h3>';
+    hands.slice().reverse().forEach(function (h, idx) {
+      var wid = 0;
+      if (h.result && h.result.winners) wid = h.result.winners[0].playerId;
+      var winName = wid === 0 ? '你赢' : 'AI 赢';
+      var note = noteFor(h.id);
+      html += '<div class="hand-line" data-idx="' + (hands.length - 1 - idx) + '">' +
+        '<span>#' + h.id + '</span>' +
+        '<span>' + winName + '</span>' +
+        '<span>' + (h.board || []).map(E.cardStr).join(' ') + '</span>' +
+        '<span style="margin-left:auto;color:#7f9489">' +
+        (note ? '📝 ' : '') +
+        (h.actions ? h.actions.length : 0) + ' 个动作</span></div>';
+    });
+    html += '<div class="actions">' +
+      '<button class="btn fold" id="btnExportHands">导出</button>' +
+      '<button class="btn fold" id="btnImportHands">导入</button>' +
+      '<button class="btn check" id="btnCloseModal">关闭</button></div>';
+    openModal(html);
+    $('btnCloseModal').onclick = closeModal;
+    $('btnExportHands').onclick = exportHands;
+    $('btnImportHands').onclick = importHands;
+    Array.prototype.forEach.call(document.querySelectorAll('.hand-line'), function (el) {
+      el.style.cursor = 'pointer';
+      el.onclick = function () { showHandDetail(hands[+el.getAttribute('data-idx')]); };
+    });
+  }
+
+  // ---------------- 导出 / 导入 ----------------
+  function exportHands() {
+    var data = {
+      schemaVersion: 2,
+      exportedAt: Date.now(),
+      hands: loadHands(),
+      notes: loadNotes()
+    };
+    try {
+      var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'poker-hands-' + new Date().toISOString().slice(0, 10) + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    } catch (e) {
+      alert('导出失败：' + e.message);
+    }
+  }
+
+  function importHands() {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.json,application/json';
+    inp.onchange = function () {
+      var f = inp.files && inp.files[0];
+      if (!f) return;
+      var r = new FileReader();
+      r.onload = function () {
+        try {
+          var data = JSON.parse(r.result);
+          var incoming = Array.isArray(data) ? data : (data.hands || []);
+          if (!Array.isArray(incoming)) throw new Error('文件里没有 hands 数组');
+          var cur = LS.get('poker.hands.v2', []);
+          var seen = {};
+          cur.forEach(function (h) { seen[h.time + ':' + h.id] = true; });
+          var added = 0;
+          incoming.forEach(function (h) {
+            if (!h || typeof h.time !== 'number') return;
+            var k = h.time + ':' + h.id;
+            if (seen[k]) return;
+            cur.push(h);
+            seen[k] = true;
+            added++;
+          });
+          if (cur.length > 200) cur = cur.slice(cur.length - 200);
+          LS.set('poker.hands.v2', cur);
+          if (data.notes && typeof data.notes === 'object') {
+            var n = loadNotes();
+            var have = {};
+            n.forEach(function (x) { have[x.handId] = true; });
+            var incomingNotes = Array.isArray(data.notes)
+              ? data.notes
+              : Object.keys(data.notes).map(function (k) {
+                  return { schemaVersion: 2, id: 'n' + k, text: String(data.notes[k]), handId: Number(k) };
+                });
+            incomingNotes.forEach(function (x) {
+              if (!x || typeof x.handId !== 'number' || typeof x.text !== 'string') return;
+              if (have[x.handId]) return;
+              n.push({ schemaVersion: 2, id: x.id || ('n' + x.handId), text: x.text, handId: x.handId });
+              have[x.handId] = true;
+            });
+            LS.set('poker.notes.v2', n);
+          }
+          alert('导入完成，新增 ' + added + ' 手。');
+          showHistory();
+        } catch (e) {
+          alert('导入失败：' + e.message);
+        }
+      };
+      r.readAsText(f);
+    };
+    inp.click();
+  }
+
+  var ACT_CN = { fold: '弃牌', call: '跟注', check: '过牌', raise: '加注到', allin: '全下' };
+
+  function showHandDetail(h) {
+    if (!h) return;
+    var names = {};
+    (h.players || []).forEach(function (p) { names[p.id] = p.name; });
+    var html = '<h3>第 ' + h.id + ' 手</h3>';
+    html += '<div class="row"><span>公共牌</span><span>' +
+      ((h.board || []).length ? h.board.map(E.cardStr).join(' ') : '（未发）') + '</span></div>';
+    (h.players || []).forEach(function (p) {
+      html += '<div class="row"><span>' + p.name + '</span><span>' +
+        (p.hole || []).map(E.cardStr).join(' ') + '　筹码 ' + p.finalChips + '</span></div>';
+    });
+    if (h.result && h.result.winners) {
+      h.result.winners.forEach(function (w) {
+        var nm = (h.players || [])[w.playerId] ? h.players[w.playerId].name : ('#' + w.playerId);
+        html += '<div class="row"><span>' + nm + '</span><span class="win">+' + w.amount + '（' + (w.reason || '') + '）</span></div>';
+      });
+    }
+
+    // 动作回放
+    html += '<div class="review-title">动作回放</div>';
+    html += '<div class="replay-ctrl">' +
+      '<button class="btn fold" id="rvFirst">⏮</button>' +
+      '<button class="btn fold" id="rvPrev">◀</button>' +
+      '<button class="btn check" id="rvPlay">▶ 播放</button>' +
+      '<button class="btn fold" id="rvNext">▶</button>' +
+      '<button class="btn fold" id="rvLast">⏭</button>' +
+      '<span class="rv-step" id="rvStep"></span>' +
+      '</div>';
+    html += '<div class="replay-board" id="rvBoard">（未发）</div>';
+    html += '<div class="replay-pots" id="rvPots"></div>';
+    html += '<div class="replay-list" id="rvList"></div>';
+
+    // 当时做的复盘
+    if (h.review && h.review.length) {
+      html += '<div class="review-title">当时的复盘</div>';
+      h.review.forEach(function (rv) {
+        html += '<div class="review-item ' + rv.verdict + '">' +
+          '<span class="rv-tag">' + (VERDICT_CN[rv.verdict] || '') + '</span>' +
+          '<div class="rv-text">' + rv.text + '</div>' +
+          '<div class="rv-assume">底池赔率 ' + pct(rv.assumptions.potOdds) +
+          ' · 假设：' + rv.assumptions.opponentRange +
+          ' <button class="rv-jump" data-rv="' + rv.actionIndex + '">看这步</button>' +
+          '</div></div>';
+      });
+    }
+
+    html += '<div class="review-title">这手笔记</div>';
+    html += '<textarea id="noteBox" class="note-box" rows="3" ' +
+      'placeholder="写一句：这手为什么这么打、下次怎么改"></textarea>';
+    html += '<div class="actions">' +
+      '<button class="btn fold" id="btnSaveNote">保存笔记</button>' +
+      '<button class="btn check" id="btnBackHist">返回列表</button></div>';
+    openModal(html);
+    var nb = $('noteBox');
+    if (nb) nb.value = noteFor(h.id) || '';
+    $('btnSaveNote').onclick = function () {
+      saveNote(h.id, nb.value);
+      $('btnSaveNote').textContent = '已保存';
+      setTimeout(function () {
+        if ($('btnSaveNote')) $('btnSaveNote').textContent = '保存笔记';
+      }, 1200);
+    };
+    $('btnBackHist').onclick = showHistory;
+    var rp = setupReplay(h);
+    Array.prototype.forEach.call(document.querySelectorAll('.rv-jump'), function (b) {
+      b.onclick = function () { rp.goto(+b.getAttribute('data-rv')); };
+    });
+  }
+
+  function loadHands() {
+    var hs = LS.get('poker.hands.v2', []);
+    if (!Array.isArray(hs)) return [];
+    return hs.map(function (h) {
+      if (!h || typeof h !== 'object') return null;
+      if (!Array.isArray(h.messages)) h.messages = [];
+      if (!Array.isArray(h.sidePots)) h.sidePots = [];
+      if (!Array.isArray(h.actions)) h.actions = [];
+      if (h.review === undefined) h.review = null;
+      return h;
+    }).filter(Boolean);
+  }
+
+  function loadNotes() {
+    var n = LS.get('poker.notes.v2', null);
+    if (Array.isArray(n)) {
+      return n.filter(function (x) { return x && typeof x.handId === 'number' && typeof x.text === 'string'; });
+    }
+    // 兼容早期「对象 map」写法
+    if (n && typeof n === 'object') {
+      return Object.keys(n).map(function (k) {
+        return { schemaVersion: 2, id: 'n' + k, text: String(n[k]), handId: Number(k) };
+      });
+    }
+    return [];
+  }
+
+  function noteFor(handId) {
+    var n = loadNotes();
+    for (var i = 0; i < n.length; i++) {
+      if (n[i].handId === handId) return n[i].text;
+    }
+    return '';
+  }
+
+  function saveNote(handId, text) {
+    var n = loadNotes();
+    var t = String(text || '').trim();
+    n = n.filter(function (x) { return x.handId !== handId; });
+    if (t) {
+      n.push({ schemaVersion: 2, id: 'n' + handId + '-' + Date.now().toString(36), text: t, handId: handId });
+    }
+    LS.set('poker.notes.v2', n);
+  }
+
+  var replayTimer = null;
+
+  function setupReplay(h) {
+    var acts = h.actions || [];
+    var n = acts.length;
+    var idx = -1;
+    var nameOf = {};
+    (h.players || []).forEach(function (p) { nameOf[p.id] = p.name; });
+
+    function renderStep() {
+      var a = (idx >= 0 && idx < n) ? acts[idx] : null;
+      var board = a ? (a.board || []) : [];
+      var bd = $('rvBoard');
+      if (bd) bd.textContent = board.length ? board.map(E.cardStr).join(' ') : '（未发）';
+
+      var bets = {};
+      for (var i = 0; i <= idx && i < n; i++) {
+        var x = acts[i];
+        bets[x.playerId] = (x.amountBefore || 0) + (x.amountAdded || 0);
+      }
+      var pots = $('rvPots');
+      if (pots) {
+        pots.innerHTML = (h.players || []).map(function (p) {
+          return '<span class="rv-pot-item' + (a && a.playerId === p.id ? ' now' : '') + '">' +
+            p.name + ' <b>' + (bets[p.id] || 0) + '</b></span>';
+        }).join('');
+      }
+
+      var list = $('rvList');
+      if (list) {
+        list.innerHTML = acts.map(function (x, i) {
+          return '<div class="replay-line' + (i === idx ? ' now' : '') + '">' +
+            '<span class="rp-street">' + (STREET_CN[x.street] || x.street) + '</span>' +
+            '<span class="rp-who">' + (nameOf[x.playerId] || ('#' + x.playerId)) + '</span>' +
+            '<span class="rp-act">' + (ACT_CN[x.type] || x.type) +
+            (x.amountAdded ? ' ' + x.amountAdded : '') + '</span>' +
+            '<span class="rp-pot">底池 ' + (x.potAfter || 0) + '</span>' +
+            '</div>';
+        }).join('');
+        var cur = list.querySelector('.replay-line.now');
+        if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
+      }
+
+      var step = $('rvStep');
+      if (step) step.textContent = (idx + 1) + ' / ' + n;
+      if ($('rvPrev')) $('rvPrev').disabled = idx < 0;
+      if ($('rvFirst')) $('rvFirst').disabled = idx < 0;
+      if ($('rvNext')) $('rvNext').disabled = idx >= n - 1;
+      if ($('rvLast')) $('rvLast').disabled = idx >= n - 1;
+    }
+
+    function stop() {
+      if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+      if ($('rvPlay')) $('rvPlay').textContent = '▶ 播放';
+    }
+
+    if ($('rvFirst')) $('rvFirst').onclick = function () { stop(); idx = -1; renderStep(); };
+    if ($('rvPrev')) $('rvPrev').onclick = function () { stop(); idx = Math.max(-1, idx - 1); renderStep(); };
+    if ($('rvNext')) $('rvNext').onclick = function () { stop(); idx = Math.min(n - 1, idx + 1); renderStep(); };
+    if ($('rvLast')) $('rvLast').onclick = function () { stop(); idx = n - 1; renderStep(); };
+    if ($('rvPlay')) {
+      $('rvPlay').onclick = function () {
+        if (replayTimer) { stop(); return; }
+        if (idx >= n - 1) idx = -1;
+        $('rvPlay').textContent = '⏸ 暂停';
+        replayTimer = setInterval(function () {
+          if (idx >= n - 1) { stop(); return; }
+          idx++;
+          renderStep();
+        }, 700);
+      };
+    }
+    renderStep();
+    return {
+      goto: function (i) {
+        stop();
+        idx = Math.max(-1, Math.min(n - 1, i));
+        renderStep();
+      }
+    };
+  }
+
+  // ---------------- 启动 ----------------
+  function showSettings() {
+    var s = loadSettings();
+    var html = '<h3>设置</h3>';
+    html += '<div class="row"><span>小盲</span><span>' +
+      '<input id="setSb" class="num-input" type="number" min="1" step="1" value="' + s.blinds.sb + '"></span></div>';
+    html += '<div class="row"><span>大盲</span><span>' +
+      '<input id="setBb" class="num-input" type="number" min="2" step="1" value="' + s.blinds.bb + '"></span></div>';
+    html += '<div class="note">改盲注会重开一局，本场手数与筹码保留。大盲不能小于小盲。</div>';
+    html += '<div class="actions">' +
+      '<button class="btn fold" id="btnCancelSet">取消</button>' +
+      '<button class="btn check" id="btnSaveSet">保存并重开</button></div>';
+    openModal(html);
+    $('btnCancelSet').onclick = closeModal;
+    $('btnSaveSet').onclick = function () {
+      var sb = Math.max(1, parseInt($('setSb').value, 10) || 10);
+      var bb = Math.max(sb, parseInt($('setBb').value, 10) || sb * 2);
+      var st = loadSettings();
+      st.blinds = { sb: sb, bb: bb };
+      saveSettings(st);
+      closeModal();
+      newGame();
+    };
+  }
+
+  function switchTable(mode) {
+    var s = loadSettings();
+    if (game) {
+      s.chips = game.players[0].chips;
+      s.hands = game.handsPlayed;
+      s.rebuys = game.rebuys;
+    }
+    s.table = mode;
+    saveSettings(s);
+    newGame();
+  }
+
+  Array.prototype.forEach.call($('modeSeg').children, function (b) {
+    b.onclick = function () {
+      var mode = b.getAttribute('data-mode');
+      if (mode === loadSettings().table) return;
+      switchTable(mode);
+    };
+  });
+
+  $('aiLevelSel').onchange = function () {
+    var s = loadSettings();
+    s.aiLevel = this.value;
+    saveSettings(s);
+    if (game) game.aiLevel = this.value;
+  };
+
+  $('msgToggle').onchange = function () {
+    var s = loadSettings();
+    s.messageEnabled = this.checked;
+    saveSettings(s);
+    if (game) {
+      game.settings = game.settings || {};
+      game.settings.messageEnabled = this.checked;
+    }
+  };
+
+  $('btnRestart').onclick = function () {
+    if (!confirm('重开一局？当前筹码会重置为 2000。')) return;
+    var s = loadSettings();
+    LS.set('poker.save.v2', {
+      schemaVersion: 2, chips: 2000, hands: 0, rebuys: 0,
+      settings: {
+        table: s.table, aiLevel: s.aiLevel, blinds: { sb: 10, bb: 20 },
+        buyIn: 2000, autoRebuy: true, messageEnabled: s.messageEnabled, avatars: []
+      },
+      stats: { vpip: 0, pfr: 0, won: 0, ev: 0 }
+    });
+    newGame();
+  };
+  $('btnHistory').onclick = showHistory;
+  $('btnStats').onclick = showStats;
+  $('btnSettings').onclick = showSettings;
+  $('btnGuide').onclick = function () { showGuide(); };
+  $('overlay').onclick = function (e) { if (e.target === $('overlay')) closeModal(); };
+
+  // 调试/截图用：?auto=N 自动随机行动打完 N 手（正常打开不受影响）
+  function startAutoPlay() {
+    var m = String(location.search || '').match(/[?&]auto=(\d+)/);
+    if (!m) return;
+    var target = +m[1];
+    var timer = setInterval(function () {
+      if (!game) return;
+      if (game.handsPlayed >= target) {
+        // 等这一手的结算弹层真的出来，再切去牌谱，避免被 showResult 覆盖
+        if (!$('overlay').classList.contains('show')) return;
+        clearInterval(timer);
+        if (/[?&]stats=1/.test(location.search)) { setTimeout(showStats, 400); return; }
+        if (/[?&]hist=1/.test(location.search)) {
+          setTimeout(function () {
+            var hs = LS.get('poker.hands.v2', []);
+            if (/[?&]hand=1/.test(location.search) && hs.length) showHandDetail(hs[0]);
+            else showHistory();
+          }, 400);
+        }
+        return;
+      }
+      if ($('overlay').classList.contains('show')) {
+        if ($('btnNextHand')) $('btnNextHand').click();
+        return;
+      }
+      var btns = $('actionButtons').children;
+      for (var i = 0; i < btns.length; i++) {
+        if (btns[i].tagName === 'BUTTON' && !btns[i].disabled) { btns[i].click(); return; }
+      }
+    }, 350);
+  }
+
+  newGame();
+  startAutoPlay();
+  if (/[?&]avatar=1/.test(location.search)) setTimeout(pickAvatar, 600);
+  var gm = String(location.search || '').match(/[?&]guide=(\w+)/);
+  if (gm) setTimeout(function () { showGuide(gm[1]); }, 600);
+
+  // 键盘操作：1 弃牌 / 2 跟注或过牌 / 3 加注 / 4 全下 / Esc 关弹层
+  document.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var tag = (e.target && e.target.tagName) || '';
+    if (/INPUT|TEXTAREA|SELECT/.test(tag)) return;
+    if ($('overlay').classList.contains('show')) {
+      if (e.key === 'Escape') { closeModal(); e.preventDefault(); }
+      return;
+    }
+    var map = { '1': 0, f: 0, '2': 1, c: 1, '3': 2, r: 2, '4': 3, a: 3 };
+    var i = map[e.key];
+    if (i === undefined) return;
+    var btns = $('actionButtons').children;
+    if (btns[i] && btns[i].tagName === 'BUTTON' && !btns[i].disabled) {
+      btns[i].click();
+      e.preventDefault();
+    }
+  });
+})();
+</script>
+</body>
+</html>
