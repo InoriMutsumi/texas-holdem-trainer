@@ -1868,11 +1868,140 @@
   }
 
   // ---------------- AI ----------------
+  // 三档差异不是「参数更凶」，而是「算得准不准、会不会犯错」
   var AI_PROFILE = {
-    easy:   { call: 0.26, raise: 0.78, bluff: 0.00, size: 0.45 },
-    normal: { call: 0.34, raise: 0.68, bluff: 0.05, size: 0.60 },
-    hard:   { call: 0.38, raise: 0.62, bluff: 0.13, size: 0.70 }
+    easy:   { aggr: 0.45, bluff: 0.03, mistake: 0.22, iters: 200 },
+    normal: { aggr: 0.45, bluff: 0.03, mistake: 0.08, iters: 500 },
+    hard:   { aggr: 0.45, bluff: 0.03, mistake: 0.00, iters: 900 }
   };
+
+  var SUIT4 = ['s', 'h', 'd', 'c'];
+  var RANK_VAL = { 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, T: 10, J: 11, Q: 12, K: 13, A: 14 };
+
+  // 翻前开池范围（AI 用；右侧「起手牌参考」显示的是同一套的自然语言版）
+  var AI_RANGES = {
+    UTG: '55+,ATs+,KQs,AJo+',
+    MP:  '44+,A9s+,KJs+,QJs,ATo+,KJo+',
+    CO:  '22+,A7s+,K9s+,QTs+,JTs,T9s,ATo+,KJo+',
+    BTN: '22+,A2s+,K5s+,Q8s+,J8s+,T8s+,98s+,A7o+,KTo+',
+    SB:  '22+,A2s+,K7s+,Q9s+,J9s+,T9s,A9o+,KJo+',
+    BB:  '22+,A2s+,K9s+,Q9s+,J9s+,T9s,A8o+',
+    'BTN/SB': '22+,A2s+,K2s+,Q5s+,J7s+,T7s+,A2o+,K7o+'
+  };
+
+  function inPreflopRange(hole, posKey) {
+    var spec = AI_RANGES[posKey];
+    if (!spec) return true;
+    var a = Math.max(hole[0].r, hole[1].r);
+    var b = Math.min(hole[0].r, hole[1].r);
+    var suited = hole[0].s === hole[1].s;
+    var items = spec.split(',');
+    for (var i = 0; i < items.length; i++) {
+      var s = items[i].trim();
+      if (!s) continue;
+      var plus = s.slice(-1) === '+';
+      if (plus) s = s.slice(0, -1);
+      if (/^([2-9TJQKA])\1$/.test(s)) {
+        var v = RANK_VAL[s[0]];
+        if (a === b && (plus ? b >= v : b === v)) return true;
+        continue;
+      }
+      var hi = RANK_VAL[s[0]], lo = RANK_VAL[s[1]], sfx = s[2];
+      if (!hi || !lo || a !== hi) continue;
+      if (sfx === 's' && !suited) continue;
+      if (sfx === 'o' && suited) continue;
+      if (plus ? b >= lo : b === lo) return true;
+    }
+    return false;
+  }
+
+  function cmpEval(x, y) {
+    var n = Math.max(x.length, y.length);
+    for (var i = 0; i < n; i++) {
+      var d = (x[i] || 0) - (y[i] || 0);
+      if (d) return d;
+    }
+    return 0;
+  }
+
+  // 从牌堆里抽两手给对手；minScore 用来排除「对手不可能玩的烂牌」
+  function pickOppHand(pool, minScore) {
+    for (var t = 0; t < 6; t++) {
+      var i = (Math.random() * pool.length) | 0;
+      var j = (Math.random() * pool.length) | 0;
+      if (i === j) continue;
+      var c1 = pool[i], c2 = pool[j];
+      if (minScore && preflopScore([c1, c2]) < minScore) continue;
+      var hi = Math.max(i, j), lo = Math.min(i, j);
+      pool.splice(hi, 1);
+      pool.splice(lo, 1);
+      return [c1, c2];
+    }
+    var a = (Math.random() * pool.length) | 0;
+    var h1 = pool.splice(a, 1)[0];
+    var b = (Math.random() * pool.length) | 0;
+    return [h1, pool.splice(b, 1)[0]];
+  }
+
+  // 蒙特卡洛胜率：给自己发若干次「随机对手 + 随机补牌」，统计赢面。
+  // 这不是训练——每次都是独立估算，算完就丢。
+  // 对手手牌不是完全随机的：太烂的牌会被排除，否则会高估自己的胜率。
+  function equity(hole, board, nOpp, iters) {
+    var dead = {};
+    for (var i = 0; i < hole.length; i++) dead[hole[i].r + hole[i].s] = 1;
+    for (var j = 0; j < board.length; j++) dead[board[j].r + board[j].s] = 1;
+    var pool = [];
+    for (var si = 0; si < SUIT4.length; si++) {
+      for (var r = 2; r <= 14; r++) {
+        var key = r + SUIT4[si];
+        if (!dead[key]) pool.push({ r: r, s: SUIT4[si] });
+      }
+    }
+    var need = 5 - board.length;
+    if (pool.length < nOpp * 2 + need) return 0.5;
+    var win = 0, tie = 0;
+    for (var it = 0; it < iters; it++) {
+      var p = pool.slice();
+      var opps = [];
+      for (var o = 0; o < nOpp; o++) opps.push(pickOppHand(p, 0.20));
+      var run = [];
+      for (var k = 0; k < need; k++) {
+        var xr = (Math.random() * p.length) | 0;
+        run.push(p.splice(xr, 1)[0]);
+      }
+      var full = board.concat(run);
+      var mine = E.eval7(hole.concat(full));
+      var lost = false, tied = false;
+      for (var q = 0; q < opps.length; q++) {
+        var c = cmpEval(E.eval7(opps[q].concat(full)), mine);
+        if (c > 0) { lost = true; break; }
+        if (c === 0) tied = true;
+      }
+      if (lost) continue;
+      if (tied) tie++; else win++;
+    }
+    return (win + tie / 2) / iters;
+  }
+
+  // 同一街、同一手牌、同一人数，胜率算一次就够
+  var _eqCache = { key: '', val: 0.5 };
+  function cachedEquity(hole, board, nOpp, iters) {
+    var key = nOpp + '|' + hole[0].r + hole[0].s + hole[1].r + hole[1].s + '|';
+    for (var i = 0; i < board.length; i++) key += board[i].r + board[i].s;
+    if (_eqCache.key === key) return _eqCache.val;
+    var val = equity(hole, board, nOpp, iters);
+    _eqCache.key = key;
+    _eqCache.val = val;
+    return val;
+  }
+
+  // 胜率越高，下注越重
+  function betFrac(eq) {
+    if (eq > 0.86) return 0.85;
+    if (eq > 0.72) return 0.68;
+    if (eq > 0.60) return 0.52;
+    return 0.40;
+  }
 
   function preflopScore(hole) {
     // Chen formula 归一化到 0..1
@@ -1895,12 +2024,6 @@
     return Math.max(0, Math.min(1, (score + 1) / 21));
   }
 
-  function postflopScore(hole, board) {
-    var v = E.eval7(hole.concat(board));
-    var base = [0.08, 0.32, 0.52, 0.68, 0.78, 0.84, 0.9, 0.96, 1.0][v[0]];
-    return base;
-  }
-
   function aiDecide(g, seat) {
     var p = g.players[seat];
     var cfg = AI_PROFILE[g.aiLevel] || AI_PROFILE.normal;
@@ -1908,21 +2031,9 @@
     var toCall = g.streetCurrentBet - p.streetBet;
     var raiseAct = acts.filter(function (a) { return a.type === 'raise'; })[0];
     var canRaise = !!raiseAct;
-    var canCheck = acts.some(function (a) { return a.type === 'check'; });
-
-    var strength = g.street === 'preflop'
-      ? preflopScore(p.hole)
-      : postflopScore(p.hole, g.board);
-
-    // 剩余玩家越多，同样牌力越要收紧
     var alive = g.players.filter(function (x) { return !x.folded; }).length;
-    // 位置修正：越靠后（按钮）越敢玩，前面位置收紧
-    var posBonus = 0;
-    if (g.mode === 'six') {
-      var rel = (seat - g.buttonSeat + 6) % 6; // 0=BTN 1=SB 2=BB 3=UTG 4=MP 5=CO
-      posBonus = [0.10, 0.00, 0.03, -0.10, -0.05, 0.02][rel] || 0;
-    }
-    var adj = strength + posBonus - (alive - 2) * 0.02;
+    var nOpp = Math.max(1, alive - 1);
+    var posKey = posLabel(seat);
 
     function raiseTo(frac) {
       if (!canRaise) return toCall > 0 ? { type: 'call' } : { type: 'check' };
@@ -1931,30 +2042,51 @@
       return { type: 'raise', amount: target };
     }
 
-    // 强牌：主动做大
-    if (adj > cfg.raise) {
-      if (canRaise) return raiseTo(cfg.size);
-      return toCall > 0 ? { type: 'call' } : { type: 'check' };
-    }
-    // 中等牌：按赔率跟，偶尔主动下注
-    if (adj > cfg.call) {
-      if (toCall <= 0) {
-        if (canRaise && Math.random() < 0.3) return raiseTo(cfg.size * 0.7);
-        return { type: 'check' };
-      }
-      var need = toCall / (g.pot + toCall);
-      if (need <= cfg.call + 0.06) return { type: 'call' };
+    // ---- 翻前先过范围闸门（不用算胜率，省算力）----
+    if (g.street === 'preflop' && !inPreflopRange(p.hole, posKey)) {
+      if (toCall === 0) return { type: 'check' };
+      var blindPos = posKey === 'BB' || posKey === 'SB' || posKey === 'BTN/SB';
+      if (blindPos && toCall <= g.bigBlind && Math.random() < 0.55) return { type: 'call' };
       return { type: 'fold' };
     }
-    // 诈唬：牌力弱、代价小时偷池
-    if (Math.random() < cfg.bluff && toCall <= g.pot * 0.3) {
-      if (canRaise) return raiseTo(cfg.size);
-      if (canCheck) return { type: 'check' };
+
+    var eq = cachedEquity(p.hole, g.board, nOpp, cfg.iters);
+    var potOdds = toCall > 0 ? toCall / (g.pot + toCall) : 0;
+
+    // 软档的「失误」：以一定概率不看牌力乱做，所以新手档明显好打
+    if (cfg.mistake && Math.random() < cfg.mistake) {
+      var r = Math.random();
+      if (r < 0.45 && toCall > 0) return { type: 'fold' };
+      if (r < 0.80 && toCall <= p.chips * 0.06) return { type: 'call' };
+      if (canRaise) return raiseTo(0.6);
+      return toCall > 0 ? { type: 'call' } : { type: 'check' };
     }
-    if (toCall <= 0) return { type: 'check' };
-    // 老手面对小注会多跟一张
-    if (g.aiLevel === 'hard' && toCall <= g.bigBlind * 2) return { type: 'call' };
-    return { type: 'fold' };
+
+    // 面对下注时，对手范围不是随机的：下注越大越像有牌，自己的胜率要打折。
+    // 不打这个折，AI 会拿「对随机牌的胜率」去跟「对强范围的加注」，越准越亏。
+    if (toCall > 0) {
+      var pressure = toCall / (g.pot || 1);
+      eq *= pressure > 0.6 ? 0.84 : (pressure > 0.25 ? 0.91 : 0.96);
+    }
+
+    // ---- 面对下注且胜率不够付价格：弃，但保留诈唬和「软档犯错」 ----
+    var minEq = potOdds + 0.06 + (nOpp - 1) * 0.04;
+    if (toCall > 0 && eq < minEq) {
+      if (canRaise && Math.random() < cfg.bluff && toCall <= g.pot * 0.5) return raiseTo(0.62);
+      if (Math.random() < cfg.mistake && toCall <= p.chips * 0.05) return { type: 'call' };
+      return { type: 'fold' };
+    }
+
+    // ---- 有价值：按胜率决定加注还是跟注 ----
+    var raiseLine = 0.62 + (nOpp - 1) * 0.055;
+    if (eq > raiseLine && canRaise) {
+      var raiseProb = eq > 0.80 ? 0.80 : 0.42;
+      if (Math.random() < raiseProb + 0.18 * cfg.aggr) return raiseTo(betFrac(eq));
+      return toCall > 0 ? { type: 'call' } : { type: 'check' };
+    }
+    if (toCall > 0) return { type: 'call' };
+    if (canRaise && Math.random() < cfg.bluff) return raiseTo(0.5);
+    return { type: 'check' };
   }
 
   function scheduleAI() {
