@@ -275,6 +275,13 @@
     border-radius: 10px; font-family: inherit;
   }
   .modal .avatar-pick:hover { border-color: #ffd479; background: rgba(255,212,121,.10); }
+  .modal .more-list { display: flex; flex-direction: column; gap: 8px; }
+  .modal .more-item {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10);
+    color: #cfe0d6; padding: 14px 16px; border-radius: 10px; font-size: 15px;
+    font-family: inherit; cursor: pointer; text-align: left;
+  }
+  .modal .more-item:hover { background: rgba(255,255,255,.12); }
   .modal .review-title {
     margin: 14px 0 8px; font-weight: 700; color: #ffd479; font-size: 13px;
     border-top: 1px solid rgba(255,255,255,.08); padding-top: 12px;
@@ -335,15 +342,148 @@
     border-bottom: 1px solid rgba(255,255,255,.05);
   }
   .modal .term-name { width: 84px; flex: none; color: #ffd479; font-size: 13px; }
+  .mobile-only { display: none; }
+  #btnMore, #btnInfo, .info-close { display: none; }
+
   @media (max-width: 720px) {
-    .modal .hand-rank-cards { display: none; }
+    .modal .hand-rank-cards { gap: 2px; }
+    .modal .hand-rank-cards .card { width: 26px; height: 36px; }
+    .modal .hand-rank-cards .card .rk { font-size: 11px; }
+    .modal .hand-rank-cards .card .su { font-size: 10px; }
+    .modal .hand-rank-row { gap: 8px; }
+    .modal .hand-rank-name { width: 66px; font-size: 12px; }
+    .modal .hand-rank-tip { font-size: 11px; }
+  }
+
+  /* ---------- 手机竖屏适配（≤899px） ---------- */
+  @media (max-width: 899px) {
+    body { min-width: 0; }
+    .desktop-only { display: none !important; }
+    #btnMore { display: inline-flex !important; align-items: center; justify-content: center; }
+    #btnInfo { display: inline-flex !important; align-items: center; justify-content: center; }
+    .info-close { display: block; }
+    .app { height: 100dvh; }
+
+    /* 顶栏 */
+    .topbar { gap: 6px; padding: 6px 8px; font-size: 12px; overflow: hidden; }
+    .topbar .brand { font-size: 15px; letter-spacing: 0; flex: none; }
+    .brand-text { display: none; }
+    .topbar .stat, .topbar .ai-level, .topbar .msg-toggle { display: none; }
+    .topbar .btn-mini { padding: 6px 10px; font-size: 13px; flex: none; }
+    .seg { flex: none; }
+    .seg button { padding: 5px 8px; font-size: 11px; }
+
+    /* 主区 */
+    .main { flex-direction: column; min-width: 0; }
+    .table-wrap { padding: 4px; min-width: 0; }
+    .table { width: 100%; }
+    .felt { inset: 6px; border-radius: 46% / 40%; border-width: 6px; }
+
+    /* 座位 */
+    .seat { width: 88px; }
+    .seat.me { width: 132px; }
+    .avatar { width: 32px; height: 32px; font-size: 16px; border-width: 1px; }
+    .seat.me .avatar { width: 38px; height: 38px; font-size: 19px; }
+    .seat .who { font-size: 10px; }
+    .seat .chips { font-size: 11px; }
+    .seat.me .who { font-size: 11px; }
+    .seat.me .chips { font-size: 12px; }
+    .seat .pos-tag { font-size: 9px; padding: 0 3px; margin-left: 2px; }
+    .seat .folded-mark { font-size: 9px; }
+    .seat .bet-pill { font-size: 10px; padding: 0 6px; bottom: -11px; }
+    .seat .bubble { font-size: 10px; padding: 3px 7px; max-width: 112px; white-space: normal; line-height: 1.3; }
+    .dealer-btn { width: 15px; height: 15px; font-size: 8px; left: auto; right: 0; top: 0; }
+
+    /* 中央 */
+    .center { gap: 6px; }
+    .pot-box { font-size: 12px; padding: 3px 12px; }
+    .pot-box b { font-size: 15px; }
+    .board { gap: 4px; min-height: 58px; }
+    .card { width: 40px; height: 56px; border-radius: 5px; }
+    .card .rk { font-size: 17px; }
+    .card .su { font-size: 15px; }
+    .card.small { width: 28px; height: 40px; }
+    .card.small .rk { font-size: 12px; }
+    .card.small .su { font-size: 11px; }
+    .hole-row { gap: 4px; margin-top: 4px; }
+    .street-label { font-size: 10px; }
+
+    /* 信息栏 → 底部抽屉 */
+    .info {
+      position: fixed; left: 0; right: 0; bottom: 0; width: auto; z-index: 45;
+      max-height: 64vh; border-left: 0; border-top: 1px solid rgba(255,255,255,.14);
+      border-radius: 16px 16px 0 0; background: #0e1813;
+      transform: translateY(105%); transition: transform .25s ease;
+      box-shadow: 0 -12px 40px rgba(0,0,0,.65);
+    }
+    .info.open { transform: translateY(0); }
+    .info-close {
+      padding: 10px; text-align: center; font-size: 13px; color: #9fb3a8;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .info .log { max-height: 26vh; }
+
+    /* 底栏 */
+    .actionbar {
+      padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+      gap: 6px; min-height: 0;
+    }
+    .actionbar .hint, .actionbar .odds-hint { display: none; }
+    .actionbuttons { gap: 6px; flex-wrap: wrap; min-width: 0; }
+    .actionbuttons .btn { flex: 1 1 0; min-width: 0; order: 0; }
+    .actionbuttons .btn.allin { order: 1; }
+    .actionbuttons .raise-panel { flex: 1 1 100%; order: 9; }
+    .btn {
+      padding: 13px 4px; font-size: 13px; min-height: 46px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .raise-panel { gap: 8px; }
+    .raise-panel input[type=range] { width: 56%; }
+    .raise-panel .amt { min-width: 54px; }
+    .info-btn { flex: none; min-width: 52px; min-height: 46px; }
+
+    /* 弹层 */
+    .modal {
+      width: calc(100vw - 20px); max-height: 88vh;
+      padding: 16px 14px; border-radius: 12px;
+    }
+    .modal h3 { font-size: 16px; margin-bottom: 10px; }
+    .modal .row, .modal .hand-line { font-size: 12px; }
+    .modal .actions .btn { flex: 1; padding: 11px 0; }
+    .modal .stat-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+    .modal .replay-line .rp-street { width: 32px; }
+    .modal .replay-line .rp-who { width: 64px; }
+    .modal .replay-line .rp-act { font-size: 11px; }
+    .modal .guide-tab { padding: 6px 12px; font-size: 12px; }
+  }
+
+  /* 手机横屏：只求能玩，不求精致 */
+  @media (max-width: 899px) and (orientation: landscape) and (max-height: 500px) {
+    .table-wrap { padding: 2px; }
+    .seat { width: 74px; }
+    .seat.me { width: 112px; }
+    .avatar { width: 26px; height: 26px; font-size: 13px; }
+    .seat.me .avatar { width: 30px; height: 30px; font-size: 15px; }
+    .seat .who { font-size: 9px; }
+    .seat .chips { font-size: 10px; }
+    .card { width: 34px; height: 48px; }
+    .card .rk { font-size: 14px; }
+    .card .su { font-size: 12px; }
+    .board { min-height: 48px; }
+    .pot-box { padding: 2px 10px; font-size: 11px; }
+    .pot-box b { font-size: 13px; }
+    .street-label { display: none; }
+    .center { gap: 4px; }
+    .actionbar { padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); }
+    .btn { min-height: 40px; padding: 8px 4px; font-size: 12px; }
+    .raise-panel input[type=range] { width: 50%; }
   }
 </style>
 </head>
 <body>
 <div class="app">
   <header class="topbar">
-    <span class="brand" id="brand">🐋 德州扑克 · 单挑练习</span>
+    <span class="brand" id="brand">🐋 <span class="brand-text">德州扑克 · 单挑练习</span></span>
     <div class="seg" id="modeSeg">
       <button data-mode="hu" class="on">单挑</button>
       <button data-mode="six">6 人桌</button>
@@ -360,11 +500,12 @@
     </select></label>
     <label class="stat msg-toggle"><input type="checkbox" id="msgToggle" checked> 消息</label>
     <span class="spacer"></span>
-    <button class="btn-mini" id="btnGuide">规则</button>
-    <button class="btn-mini" id="btnSettings">设置</button>
-    <button class="btn-mini" id="btnStats">统计</button>
-    <button class="btn-mini" id="btnHistory">牌谱</button>
-    <button class="btn-mini" id="btnRestart">重开</button>
+    <button class="btn-mini desktop-only" id="btnGuide">规则</button>
+    <button class="btn-mini desktop-only" id="btnSettings">设置</button>
+    <button class="btn-mini desktop-only" id="btnStats">统计</button>
+    <button class="btn-mini desktop-only" id="btnHistory">牌谱</button>
+    <button class="btn-mini desktop-only" id="btnRestart">重开</button>
+    <button class="btn-mini mobile-only" id="btnMore">⋯</button>
   </header>
 
   <div class="main">
@@ -382,7 +523,8 @@
       </div>
     </div>
 
-    <aside class="info">
+    <aside class="info" id="infoPanel">
+      <div class="info-close mobile-only" id="infoClose">收起 ▾</div>
       <div class="info-section">
         <h4>局面</h4>
         <div class="info-row"><span>位置</span><b id="infoPos">—</b></div>
@@ -399,6 +541,7 @@
   </div>
 
   <footer class="actionbar">
+    <button class="btn-mini mobile-only info-btn" id="btnInfo">信息</button>
     <div class="hint" id="actionHint">点「开始新一手」发牌</div>
     <div class="actionbuttons" id="actionButtons"></div>
     <div class="odds-hint" id="oddsHint"></div>
@@ -1284,7 +1427,8 @@
       six: '🐋 德州扑克 · 6 人桌',
       nine: '🐋 德州扑克 · 9 人桌'
     };
-    $('brand').textContent = brandMap[s.table] || brandMap.hu;
+    $('brand').innerHTML = '🐋 <span class="brand-text">' +
+      (brandMap[s.table] || brandMap.hu) + '</span>';
     $('aiLevelSel').value = s.aiLevel;
     $('msgToggle').checked = s.messageEnabled !== false;
     Array.prototype.forEach.call($('modeSeg').children, function (b) {
@@ -1438,10 +1582,17 @@
     renderSeats();
   }
 
+  function isNarrow() {
+    return window.matchMedia('(max-width: 899px)').matches;
+  }
+
   function placeSeat(el, idx, n) {
+    var narrow = isNarrow();
+    var rx = narrow ? 40 : 42;
+    var ry = narrow ? 34 : 28;
     var theta = (idx / n) * Math.PI * 2;
-    el.style.left = (50 + 42 * Math.sin(theta)) + '%';
-    el.style.top = (50 + 28 * Math.cos(theta)) + '%';
+    el.style.left = (50 + rx * Math.sin(theta)) + '%';
+    el.style.top = (50 + ry * Math.cos(theta)) + '%';
   }
 
   function buildSeats() {
@@ -2620,6 +2771,11 @@
   function showSettings() {
     var s = loadSettings();
     var html = '<h3>设置</h3>';
+    html += '<div class="row"><span>AI 难度</span><span><select id="setAi" class="num-input">' +
+      '<option value="easy">新手</option><option value="normal">普通</option>' +
+      '<option value="hard">老手</option></select></span></div>';
+    html += '<div class="row"><span>AI 行动消息</span><span>' +
+      '<input type="checkbox" id="setMsg"' + (s.messageEnabled !== false ? ' checked' : '') + '></span></div>';
     html += '<div class="row"><span>小盲</span><span>' +
       '<input id="setSb" class="num-input" type="number" min="1" step="1" value="' + s.blinds.sb + '"></span></div>';
     html += '<div class="row"><span>大盲</span><span>' +
@@ -2629,13 +2785,23 @@
       '<button class="btn fold" id="btnCancelSet">取消</button>' +
       '<button class="btn check" id="btnSaveSet">保存并重开</button></div>';
     openModal(html);
+    $('setAi').value = s.aiLevel || 'normal';
     $('btnCancelSet').onclick = closeModal;
     $('btnSaveSet').onclick = function () {
       var sb = Math.max(1, parseInt($('setSb').value, 10) || 10);
       var bb = Math.max(sb, parseInt($('setBb').value, 10) || sb * 2);
       var st = loadSettings();
       st.blinds = { sb: sb, bb: bb };
+      st.aiLevel = $('setAi').value;
+      st.messageEnabled = $('setMsg').checked;
       saveSettings(st);
+      if (game) {
+        game.aiLevel = st.aiLevel;
+        game.settings = game.settings || {};
+        game.settings.messageEnabled = st.messageEnabled;
+      }
+      if ($('aiLevelSel')) $('aiLevelSel').value = st.aiLevel;
+      if ($('msgToggle')) $('msgToggle').checked = st.messageEnabled;
       closeModal();
       newGame();
     };
@@ -2695,6 +2861,47 @@
   $('btnStats').onclick = showStats;
   $('btnSettings').onclick = showSettings;
   $('btnGuide').onclick = function () { showGuide(); };
+
+  // ---------------- 手机端：信息抽屉与更多菜单 ----------------
+  function toggleInfo(force) {
+    var el = $('infoPanel');
+    if (!el) return;
+    var open = typeof force === 'boolean' ? force : !el.classList.contains('open');
+    el.classList.toggle('open', open);
+    if ($('btnInfo')) $('btnInfo').classList.toggle('on', open);
+  }
+
+  function showMoreMenu() {
+    var items = [
+      ['guide', '规则教学'],
+      ['settings', '设置'],
+      ['stats', '统计'],
+      ['history', '牌谱'],
+      ['restart', '重开一局']
+    ];
+    var html = '<h3>更多</h3><div class="more-list">';
+    items.forEach(function (it) {
+      html += '<button class="more-item" data-act="' + it[0] + '">' + it[1] + '</button>';
+    });
+    html += '</div><div class="actions"><button class="btn check" id="btnCloseMore">关闭</button></div>';
+    openModal(html);
+    $('btnCloseMore').onclick = closeModal;
+    Array.prototype.forEach.call(document.querySelectorAll('.more-item'), function (b) {
+      b.onclick = function () {
+        var act = b.getAttribute('data-act');
+        closeModal();
+        if (act === 'guide') showGuide();
+        else if (act === 'settings') showSettings();
+        else if (act === 'stats') showStats();
+        else if (act === 'history') showHistory();
+        else if (act === 'restart') $('btnRestart').click();
+      };
+    });
+  }
+
+  $('btnInfo').onclick = function () { toggleInfo(); };
+  $('infoClose').onclick = function () { toggleInfo(false); };
+  $('btnMore').onclick = showMoreMenu;
   $('overlay').onclick = function (e) { if (e.target === $('overlay')) closeModal(); };
 
   // 调试/截图用：?auto=N 自动随机行动打完 N 手（正常打开不受影响）
@@ -2734,6 +2941,43 @@
   if (/[?&]avatar=1/.test(location.search)) setTimeout(pickAvatar, 600);
   var gm = String(location.search || '').match(/[?&]guide=(\w+)/);
   if (gm) setTimeout(function () { showGuide(gm[1]); }, 600);
+  if (/[?&]info=1/.test(location.search)) setTimeout(function () { toggleInfo(true); }, 600);
+  if (/[?&]debug=1/.test(location.search)) {
+    setTimeout(function () {
+      var cs = window.getComputedStyle;
+      var wide = [];
+      Array.prototype.forEach.call(document.querySelectorAll('*'), function (el) {
+        if (el.offsetWidth > 400 && cs(el).position !== 'fixed') {
+          wide.push((el.id || el.className || el.tagName) + '=' + el.offsetWidth);
+        }
+      });
+      document.title = 'vw' + document.documentElement.clientWidth +
+        ' body' + document.body.offsetWidth + ' | ' + wide.slice(0, 8).join(', ');
+    }, 800);
+  }
+
+  // 屏幕尺寸变化时重新摆放座位
+  var resizeTimer = null;
+  window.addEventListener('resize', function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (!game || !seatEls.length) return;
+      var n = game.players.length;
+      game.players.forEach(function (p, i) {
+        if (seatEls[p.id]) placeSeat(seatEls[p.id].root, i, n);
+      });
+    }, 120);
+  });
+
+  // 手机上点牌桌区域收起信息抽屉
+  document.addEventListener('click', function (e) {
+    var panel = $('infoPanel');
+    if (!panel || !panel.classList.contains('open')) return;
+    if (panel.contains(e.target)) return;
+    var btn = $('btnInfo');
+    if (btn && (e.target === btn || btn.contains(e.target))) return;
+    toggleInfo(false);
+  });
 
   // 键盘操作：1 弃牌 / 2 跟注或过牌 / 3 加注 / 4 全下 / Esc 关弹层
   document.addEventListener('keydown', function (e) {

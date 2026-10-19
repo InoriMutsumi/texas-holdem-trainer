@@ -84,6 +84,7 @@ const sandbox = {
   setTimeout: (fn) => { fn(); return 0; },   // AI 立即行动，便于同步冒烟
   clearTimeout: () => {},
   confirm: () => true,
+  matchMedia: () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }),
   Date, Math, JSON
 };
 sandbox.window = sandbox;
