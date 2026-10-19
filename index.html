@@ -90,6 +90,7 @@
   .avatar.mine:hover { border-color: #ffd479; }
   .seat .who { font-size: 12px; color: #cfe0d6; text-align: left; }
   .seat .chips { font-size: 14px; font-weight: 700; color: #ffd479; margin-top: 1px; text-align: left; }
+  .seat .style-tag { display: none; font-size: 10px; line-height: 15px; padding: 0 5px; margin-top: 2px; border-radius: 4px; background: rgba(120, 200, 255, .16); color: #8fd4ff; text-align: left; width: fit-content; }
   .seat.me .who { font-size: 13px; }
   .seat.me .chips { font-size: 15px; }
   .seat .pos-tag {
@@ -208,6 +209,14 @@
     box-shadow: 0 20px 60px rgba(0,0,0,.7);
   }
   .modal h3 { font-size: 17px; color: #ffd479; margin-bottom: 14px; }
+  .modal.wide { width: 760px; max-width: 94vw; }
+  .gto-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .gto-bar select { background: #1d2f27; color: #dbe7df; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 6px 10px; font-size: 13px; max-width: 100%; }
+  .gto-note { font-size: 11px; color: #7f9489; }
+  .gto-grid { display: grid; grid-template-columns: repeat(13, 1fr); gap: 2px; }
+  .gto-cell { aspect-ratio: 1 / 1; border-radius: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
+  .gto-cell b { font-size: 10px; color: #fff; font-weight: 700; line-height: 1.1; }
+  .gto-cell i { font-style: normal; font-size: 8px; color: rgba(255,255,255,.82); line-height: 1.1; }
   .modal .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
   .modal .row .win { color: #6fcf97; font-weight: 700; }
   .modal .row .lose { color: #eb5757; }
@@ -500,6 +509,7 @@
     </select></label>
     <label class="stat msg-toggle"><input type="checkbox" id="msgToggle" checked> 消息</label>
     <span class="spacer"></span>
+    <button class="btn-mini desktop-only" id="btnGto">GTO 表</button>
     <button class="btn-mini desktop-only" id="btnGuide">规则</button>
     <button class="btn-mini desktop-only" id="btnSettings">设置</button>
     <button class="btn-mini desktop-only" id="btnStats">统计</button>
@@ -552,6 +562,7 @@
   <div class="modal" id="modal"></div>
 </div>
 
+<script src="gto-data.js"></script>
 <script id="engine">
 /* =====================================================================
    规则引擎（纯逻辑，不碰 DOM）
@@ -1420,6 +1431,7 @@
     game.settings = s;
     rebuySynced = (game.rebuyEvents || []).length;
     if (s.myEmoji) game.players[0].avatar = s.myEmoji;
+    rollSeatStyles(game.players.length);
     busy = false;
     resultShown = false;
     var brandMap = {
@@ -1436,6 +1448,8 @@
     });
     buildSeats();
     E.startHand(game);
+    resetMind();
+    snapshotChips(game);
     render();
     scheduleAI();
   }
@@ -1606,7 +1620,7 @@
         '<div class="hole-row"></div>' +
         '<div class="avatar-row">' +
           '<div class="avatar"></div>' +
-          '<div><div class="who"></div><div class="chips"></div></div>' +
+          '<div><div class="who"></div><div class="chips"></div><div class="style-tag"></div></div>' +
         '</div>' +
         '<div class="folded-mark" style="display:none">已弃牌</div>' +
         '<div class="bubble"></div>' +
@@ -1617,7 +1631,7 @@
       function q(sel) { return el.querySelector(sel); }
       seatEls[p.id] = {
         root: el, hole: q('.hole-row'), avatar: q('.avatar'),
-        who: q('.who'), chips: q('.chips'), foldedMark: q('.folded-mark'),
+        who: q('.who'), chips: q('.chips'), styleTag: q('.style-tag'), foldedMark: q('.folded-mark'),
         bubble: q('.bubble'), bet: q('.bet-pill'), dealer: q('.dealer-btn')
       };
       if (p.id === 0) {
@@ -1652,6 +1666,10 @@
         (game.activeSeat === p.id ? ' active' : '') + (p.folded ? ' out' : '');
       s.who.textContent = p.name;
       s.chips.textContent = p.chips;
+      // 风格对玩家保密：不显示标签，也不留悬停提示，只能靠观察下注习惯去猜
+      s.styleTag.textContent = '';
+      s.styleTag.style.display = 'none';
+      s.styleTag.title = '';
       s.foldedMark.style.display = p.folded ? 'block' : 'none';
       s.dealer.style.display = game.buttonSeat === p.id ? 'flex' : 'none';
       s.bet.style.display = p.streetBet > 0 ? 'block' : 'none';
@@ -1690,6 +1708,32 @@
     return map[key] || '';
   }
 
+  // 翻前给玩家的 GTO 建议：直接显示当前局面下这张牌的加注/跟注/弃牌频率
+  function handAdvice() {
+    if (!game || game.handOver || game.street !== 'preflop') return '';
+    var me = game.players[0];
+    if (!me || !me.hole || me.hole.length < 2) return '';
+    var key = gtoSpot(game, 0);
+    if (!key || !GTO || !GTO.spots[key]) {
+      var t = rangeFor();
+      return t ? (t + '｜此处无 GTO 表覆盖，先按牌力参考') : '';
+    }
+    var idx = GTO_IDX[holeKey(me.hole)];
+    var f = idx === undefined ? null : parseGtoCode(GTO.spots[key][idx]);
+    if (!f) return rangeFor() || '';
+    if (game.players.length === 2) f = widenHU(f, gtoPos(0) === 'BTN');
+    var parts = [];
+    if (f.r >= 0.005) parts.push('加注 ' + Math.round(f.r * 100) + '%');
+    if (f.c >= 0.005) parts.push('跟注 ' + Math.round(f.c * 100) + '%');
+    if (f.a >= 0.005) parts.push('全下 ' + Math.round(f.a * 100) + '%');
+    if (f.f >= 0.005) parts.push('弃牌 ' + Math.round(f.f * 100) + '%');
+    var spotName = key.indexOf('rfi/') === 0
+      ? ('开池 · ' + key.slice(4))
+      : ('应对 · ' + key.slice(8));
+    var tail = game.players.length === 2 ? '（单挑已放宽）' : '';
+    return 'GTO｜' + spotName + '：' + parts.join(' / ') + tail;
+  }
+
   function render() {
     var me = game.players[0];
 
@@ -1717,7 +1761,7 @@
     $('infoOdds').textContent = need > 0 ? need + '%' : '—';
     $('infoStrength').textContent = me.hole.length ? Math.round(preflopScore(me.hole) * 100) + '%' : '—';
     $('handTip').textContent = (!game.handOver && game.street === 'preflop')
-      ? (rangeFor() || '—')
+      ? (handAdvice() || '—')
       : '翻牌后看公共牌与底池赔率，不再套起手牌表。';
 
     // 日志
@@ -1839,13 +1883,41 @@
     allin: ['全下了', '拼一把', '就这些了']
   };
 
+  // 说话的语气跟着牌力走：强牌硬气，诈唬或边缘牌心虚，上头时带火气。
+  var MSG_TONE = {
+    strong: {
+      raise: ['这手我有', '加注，接不接', '来嘛'],
+      call: ['跟，我不怕', '陪你到底'],
+      check: ['让你先说话', '我不急'],
+      allin: ['全下，看看吧'],
+      fold: ['这手让给你']
+    },
+    weak: {
+      raise: ['赌一把', '试试你还敢不敢跟', '压力给你'],
+      call: ['跟一下看看', '便宜就看看', '算了跟吧'],
+      check: ['过牌，你先', '我不想下'],
+      allin: ['不管了，全下', '就这样吧'],
+      fold: ['好吧你赢了', '弃了弃了']
+    },
+    tilt: ['再来一局我就不信了', '今天手气真差', '算了算了', '这牌真难打']
+  };
+
   function pushMessage(seat, action) {
     var enabled = !game.settings || game.settings.messageEnabled !== false;
     if (!enabled || seat === 0) return;
     var key = action.type;
     var pool = MSG_POOL[key];
     if (!pool) return;
-    var text = pool[Math.floor(Math.random() * pool.length)];
+    var mind = AI_MIND[seat];
+    var src = pool;
+    if (mind && mind.tilt > 0.35 && Math.random() < 0.55) {
+      src = MSG_TONE.tilt;
+    } else if (_lastEq >= 0.68) {
+      src = MSG_TONE.strong[key] || pool;
+    } else if (_lastEq <= 0.42) {
+      src = MSG_TONE.weak[key] || pool;
+    }
+    var text = src[Math.floor(Math.random() * src.length)];
     messages.push({
       id: 'msg-' + (messages.length + 1),
       speakerId: seat,
@@ -1868,52 +1940,290 @@
   }
 
   // ---------------- AI ----------------
-  // 三档差异不是「参数更凶」，而是「算得准不准、会不会犯错」
+  // 两个互相独立的旋钮：
+  //   难度 = 算得准不准、会不会手滑（mistake / iters / 频率模糊度）
+  //   风格 = 往哪个方向偏（6 个数字描述一种性格，改数字就能加新风格）
   var AI_PROFILE = {
-    easy:   { aggr: 0.45, bluff: 0.03, mistake: 0.22, iters: 200 },
-    normal: { aggr: 0.45, bluff: 0.03, mistake: 0.08, iters: 500 },
-    hard:   { aggr: 0.45, bluff: 0.03, mistake: 0.00, iters: 900 }
+    // 新手：不查 GTO 表、不看底池赔率、不认人、见大注就怂，算得也糙
+    easy:   { name: '新手', mistake: 0.28, iters: 120,  blur: 0.80, noGto: true,  noOdds: true,  noRead: true,  scare: 0.50 },
+    // 熟练：查表、看赔率、会读人，但执行有偏差，偶尔手滑
+    normal: { name: '熟练', mistake: 0.10, iters: 450,  blur: 0.28, noGto: false, noOdds: false, noRead: false, scare: 0.00 },
+    // 职业：全精度、零手滑、对手范围更细、会打薄价值
+    hard:   { name: '职业', mistake: 0.00, iters: 1200, blur: 0.00, noGto: false, noOdds: false, noRead: false, scare: 0.00, pro: true }
   };
+
+  // enterMul  进入底池的倾向（>1 更爱玩）
+  // raiseMul  同样进池时，选择加注而非跟注的倾向
+  // callMul   面对下注时愿意付出的价格（>1 弃牌线更低，更爱跟）
+  // bluffMul  诈唬/偷池频率
+  // sizeMul   下注尺度
+  // aggrAdd   加注概率的直接加成
+  var AI_STYLES = {
+    balanced: { name: '均衡',   tag: '稳', desc: '严格按 GTO 频率行动',           enterMul: 1.00, raiseMul: 1.00, callMul: 1.00, bluffMul: 1.00, sizeMul: 1.00, aggrAdd: 0.00 },
+    tag:      { name: '紧凶',   tag: '紧', desc: '牌少但打得凶，尊重位置',       enterMul: 0.82, raiseMul: 1.45, callMul: 0.78, bluffMul: 1.25, sizeMul: 1.05, aggrAdd: 0.18 },
+    lag:      { name: '松凶',   tag: '松', desc: '什么牌都敢打，持续施压',       enterMul: 1.32, raiseMul: 1.35, callMul: 1.00, bluffMul: 1.70, sizeMul: 1.12, aggrAdd: 0.28 },
+    station:  { name: '跟注站', tag: '松', desc: '该弃不弃，几乎从不加注',       enterMul: 1.40, raiseMul: 0.12, callMul: 2.30, bluffMul: 0.10, sizeMul: 0.70, aggrAdd: -0.30 },
+    rock:     { name: '紧弱',   tag: '紧', desc: '只玩好牌，打得被动',           enterMul: 0.62, raiseMul: 0.75, callMul: 0.68, bluffMul: 0.20, sizeMul: 0.85, aggrAdd: -0.20 },
+    weak:     { name: '松弱',   tag: '松', desc: '爱进池但不敢加注，容易漏',     enterMul: 1.28, raiseMul: 0.50, callMul: 1.70, bluffMul: 0.35, sizeMul: 0.78, aggrAdd: -0.12 },
+    maniac:   { name: '疯子',   tag: '疯', desc: '拿着什么都加注，极难缠',       enterMul: 1.70, raiseMul: 2.10, callMul: 1.10, bluffMul: 2.40, sizeMul: 1.25, aggrAdd: 0.55 }
+  };
+  var STYLE_KEYS = Object.keys(AI_STYLES);
+
+  // 每局开始时把七种性格洗一遍，依次发给桌上的 AI：座位够就完全不重复，
+  // 9 人桌超过 7 个 AI 时从第 8 个座位起随机补。
+  var _seatStyle = {};
+  function rollSeatStyles(n) {
+    var pool = STYLE_KEYS.slice();
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = (Math.random() * (i + 1)) | 0;
+      var t = pool[i]; pool[i] = pool[j]; pool[j] = t;
+    }
+    _seatStyle = {};
+    for (var s = 1; s < n; s++) {
+      _seatStyle[s] = s <= pool.length ? pool[s - 1] : pool[(Math.random() * pool.length) | 0];
+    }
+  }
+  function styleOf(seat) { return AI_STYLES[_seatStyle[seat]] || AI_STYLES.balanced; }
+
+  // ---------------- AI 的心智：跨手记忆 ----------------
+  // 真人会记住「这家伙是跟注站」「我刚输了个大池」，原来的 AI 每手都从零开始。
+  // 这里按座位记录 VPIP/PFR/翻后激进度和情绪，决策时读它做调整。
+  var AI_MIND = {};
+  var _seatLevel = {};   // 测试用：按座位覆盖难度，平时保持空对象
+  var _chipsAtHandStart = [];
+  var _lastEq = 0.5;
+
+  function mindOf(seat) {
+    if (!AI_MIND[seat]) {
+      AI_MIND[seat] = { hands: 0, vpipHands: 0, pfrHands: 0, aggActs: 0, postActs: 0, tilt: 0 };
+    }
+    return AI_MIND[seat];
+  }
+
+  function resetMind() {
+    AI_MIND = {};
+    _chipsAtHandStart = [];
+  }
+
+  // 每手抓一次筹码快照，用来算这手是赢是输
+  function snapshotChips(g) {
+    if (!g) return;
+    _chipsAtHandStart = [];
+    for (var s = 0; s < g.players.length; s++) _chipsAtHandStart[s] = g.players[s].chips;
+  }
+
+  function updateMind(g) {
+    if (!g || !g.actions || !g.actions.length) return;
+    var acts = g.actions, seen = {}, vp = {}, pf = {};
+    for (var i = 0; i < acts.length; i++) {
+      var a = acts[i];
+      if (a.playerId === 0) continue;
+      var m = mindOf(a.playerId);
+      if (a.street === 'preflop') {
+        seen[a.playerId] = 1;
+        if (a.type === 'call' || a.type === 'raise' || a.type === 'allin') vp[a.playerId] = 1;
+        if (a.type === 'raise' || a.type === 'allin') pf[a.playerId] = 1;
+      } else if (a.type === 'call' || a.type === 'raise' || a.type === 'allin') {
+        m.postActs++;
+        if (a.type === 'raise' || a.type === 'allin') m.aggActs++;
+      }
+    }
+    Object.keys(seen).forEach(function (k) {
+      var mm = mindOf(Number(k));
+      mm.hands++;
+      if (vp[k]) mm.vpipHands++;
+      if (pf[k]) mm.pfrHands++;
+    });
+    // 情绪：输掉大池会 tilt（打得更松更凶），每手自然消退
+    for (var s = 1; s < g.players.length; s++) {
+      var md = mindOf(s);
+      var before = _chipsAtHandStart[s];
+      var after = g.players[s].chips;
+      if (typeof before === 'number' && before > 0) {
+        var lost = (before - after) / before;
+        if (lost > 0.30) md.tilt = Math.min(1, md.tilt + 0.50);
+        else if (lost > 0.14) md.tilt = Math.min(1, md.tilt + 0.24);
+        else if (lost < -0.25) md.tilt = Math.max(0, md.tilt - 0.18);
+      }
+      md.tilt *= 0.92;
+    }
+  }
+
+  // 读桌：看其他座位是松鱼多还是紧手多。样本不足 6 手不下结论，免得开局乱猜。
+  function tableRead(seat) {
+    var sum = 0, n = 0, loose = 0, tight = 0;
+    if (!game || !game.players) return { n: 0, avgVpip: 0.35, loose: 0, tight: 0 };
+    for (var s = 1; s < game.players.length; s++) {
+      if (s === seat) continue;
+      var m = AI_MIND[s];
+      if (!m || m.hands < 6) continue;
+      var v = m.vpipHands / m.hands;
+      sum += v; n++;
+      if (v > 0.50) loose++;
+      if (v < 0.26) tight++;
+    }
+    return { n: n, avgVpip: n ? sum / n : 0.35, loose: loose, tight: tight };
+  }
+
+  // ---------------- GTO 翻前表 ----------------
+  var GTO = (typeof window !== 'undefined') ? window.GTO_TABLE : null;
+  var GTO_IDX = {};
+  if (GTO) { for (var _g = 0; _g < GTO.hands.length; _g++) GTO_IDX[GTO.hands[_g]] = _g; }
+  var RK13 = '23456789TJQKA';
+
+  function holeKey(hole) {
+    var a = Math.max(hole[0].r, hole[1].r);
+    var b = Math.min(hole[0].r, hole[1].r);
+    if (a === b) return RK13.charAt(a - 2) + RK13.charAt(a - 2);
+    return RK13.charAt(a - 2) + RK13.charAt(b - 2) + (hole[0].s === hole[1].s ? 's' : 'o');
+  }
+
+  // 动作串：r raise / c call / a allin / f fold；空串 = 100% 弃牌
+  function parseGtoCode(code) {
+    var f = { r: 0, c: 0, a: 0, f: 0 };
+    if (!code) { f.f = 1; return f; }
+    var i = 0;
+    while (i < code.length) {
+      var ch = code.charAt(i++), num = '';
+      while (i < code.length && /[0-9.]/.test(code.charAt(i))) num += code.charAt(i++);
+      if (f[ch] === undefined) continue;
+      f[ch] = num ? parseFloat(num) : 1;
+    }
+    var sum = f.r + f.c + f.a + f.f;
+    if (sum > 0.001 && Math.abs(sum - 1) > 0.01) { f.r /= sum; f.c /= sum; f.a /= sum; f.f /= sum; }
+    return f;
+  }
+
+  // 6max / 9max / 单挑 → 8-max 表位置（按「后面还剩几人」严格对齐）
+  function gtoPos(seat) {
+    var lab = posLabel(seat);
+    var n = game.players.length;
+    if (game.mode === 'hu') return lab === 'BB' ? 'BB' : 'BTN';
+    if (n >= 8) {
+      var m9 = { 'UTG': 'UTG', 'UTG+1': 'UTG', 'MP': 'UTG1', 'MP+1': 'MP', 'HJ': 'HJ', 'CO': 'CO', 'BTN': 'BTN', 'SB': 'SB', 'BB': 'BB' };
+      return m9[lab] || 'MP';
+    }
+    var m6 = { 'UTG': 'MP', 'MP': 'HJ', 'CO': 'CO', 'BTN': 'BTN', 'SB': 'SB', 'BB': 'BB' };
+    return m6[lab] || 'MP';
+  }
+
+  function preflopRaises(g) {
+    var out = [];
+    for (var i = 0; i < g.actions.length; i++) {
+      var a = g.actions[i];
+      if (a.street === 'preflop' && (a.type === 'raise' || a.type === 'allin')) out.push(a);
+    }
+    return out;
+  }
+
+  // 单加注防守表：真实语义是 <开牌桶>-vs-<hero>，映射来自
+  // github.com/matthiola0/poker-hand-review 的 tools/import_mtt_preflop_charts.py
+  var VS_RFI = {
+    'CO':  { 'MP': 'EP-vs-MP', 'UTG': 'EP-vs-MP', 'UTG1': 'EP-vs-MP' },
+    'BTN': { 'MP': 'EP-vs-BTN', 'UTG': 'EP-vs-BTN', 'UTG1': 'EP-vs-BTN', 'CO': 'MP-vs-BTN', 'HJ': 'MP-vs-BTN' },
+    'SB':  { 'MP': 'EP-vs-SB', 'UTG': 'EP-vs-SB', 'UTG1': 'EP-vs-SB', 'CO': 'MP-vs-SB', 'HJ': 'MP-vs-SB', 'BTN': 'BTN-vs-SB' },
+    'BB':  { 'MP': 'EP-vs-BB', 'UTG': 'EP-vs-BB', 'UTG1': 'EP-vs-BB', 'CO': 'MP-vs-BB', 'HJ': 'MP-vs-BB', 'BTN': 'BTN-vs-BB', 'SB': 'SB-vs-BB' }
+  };
+
+  // 被 3bet 后的应对表：hero 是原开牌者
+  var VS_3BET = {
+    'MP':  { 'BTN': 'EPopen-vs-IP3bet', 'CO': 'EPopen-vs-IP3bet', 'BB': 'EPopen-vs-blind3bet', 'SB': 'EPopen-vs-blind3bet' },
+    'UTG': { 'BTN': 'EPopen-vs-IP3bet', 'CO': 'EPopen-vs-IP3bet', 'BB': 'EPopen-vs-blind3bet', 'SB': 'EPopen-vs-blind3bet' },
+    'UTG1':{ 'BTN': 'EPopen-vs-IP3bet', 'CO': 'EPopen-vs-IP3bet', 'BB': 'EPopen-vs-blind3bet', 'SB': 'EPopen-vs-blind3bet' },
+    'CO':  { 'BTN': 'MPopen-vs-IP3bet', 'CO': 'MPopen-vs-IP3bet', 'BB': 'MPopen-vs-blind3bet', 'SB': 'MPopen-vs-blind3bet' },
+    'HJ':  { 'BTN': 'MPopen-vs-IP3bet', 'CO': 'MPopen-vs-IP3bet', 'BB': 'MPopen-vs-blind3bet', 'SB': 'MPopen-vs-blind3bet' },
+    'BTN': { 'BB': 'BTNopen-vs-blind3bet', 'SB': 'BTNopen-vs-blind3bet' },
+    'SB':  { 'BB': 'SBopen-vs-BB3bet' }
+  };
+
+  // 返回 GTO 表的 spot 键；返回 null 表示这手没有表覆盖，走牌力兜底
+  function gtoSpot(g, seat) {
+    var my = gtoPos(seat);
+    var rs = preflopRaises(g);
+    if (rs.length === 0) {
+      if (my === 'BB') return null;          // 无人加注，大盲免费看牌
+      return 'rfi/' + my;
+    }
+    if (rs.length === 1) {
+      var opener = gtoPos(rs[0].playerId);
+      var row = VS_RFI[my];
+      return (row && row[opener]) ? 'vs-open/' + row[opener] : null;
+    }
+    var hero = gtoPos(rs[0].playerId);
+    var tb = gtoPos(rs[1].playerId);
+    var row2 = VS_3BET[hero];
+    return (row2 && row2[tb]) ? 'vs-open/' + row2[tb] : null;
+  }
+
+  // 内置表来自 8-max，单挑时同一位置的进入率低得离谱（2Js 在单挑按钮位会被判 100% 弃牌）。
+  // 按位置给一套经验值把进入率抬起来，否则单挑会打成两个人互相等好牌。
+  // isBtn = true 表示自己是按钮位（单挑里的 BTN/SB），false 表示大盲。
+  function widenHU(f, isBtn) {
+    var enter = f.r + f.c + f.a;
+    // 表里的纯加注牌（AA/KK/AK 之类）在单挑时也是 100% 加注，不用打折
+    if (enter > 0.995 && (f.r + f.a) > 0.995) return { r: 1, a: 0, c: 0, f: 0 };
+    var e2, share;
+    if (isBtn) {
+      e2 = enter > 0.005 ? Math.min(0.92, 0.45 + enter * 0.55) : 0.28;
+      share = enter > 0.005 ? Math.min(0.90, (f.r + f.a) / enter * 1.2) : 0.35;
+    } else {
+      e2 = enter > 0.005 ? Math.min(0.82, 0.42 + enter * 0.45) : 0.35;
+      share = enter > 0.005 ? Math.min(0.70, (f.r + f.a) / enter) : 0.22;
+    }
+    return { r: e2 * share, a: 0, c: e2 * (1 - share), f: 1 - e2 };
+  }
+
+  function gtoFreqFor(g, seat, hole) {
+    var key = gtoSpot(g, seat);
+    if (!key || !GTO || !GTO.spots[key]) return null;
+    var idx = GTO_IDX[holeKey(hole)];
+    if (idx === undefined) return null;
+    var f = parseGtoCode(GTO.spots[key][idx]);
+    if (g.players.length === 2) f = widenHU(f, gtoPos(seat) === 'BTN');
+    return f;
+  }
+
+  // 风格修正：GTO 的「进入率」和「加注占比」各乘一个系数
+  // 松性格会强行玩本该弃掉的牌，凶性格会把跟注改成加注
+  function stylePreflop(freq, style) {
+    var enter = freq.r + freq.c + freq.a;
+    if (enter <= 0.0001) {
+      var force = Math.min(0.75, Math.max(0, (style.enterMul - 1) * 0.55));
+      if (force <= 0) return { r: 0, c: 0, a: 0, f: 1 };
+      var fr = Math.max(0, Math.min(1, style.aggrAdd * 0.6 + 0.10));
+      return { r: force * fr, c: force * (1 - fr), a: 0, f: 1 - force };
+    }
+    var enter2 = Math.min(1, enter * style.enterMul);
+    var raiseShare = (freq.r + freq.a) / enter;
+    var rs = Math.max(0, Math.min(1, raiseShare * style.raiseMul + style.aggrAdd * 0.8));
+    return { r: enter2 * rs, c: enter2 * (1 - rs), a: 0, f: 1 - enter2 };
+  }
+
+  // 难度：给频率加噪声，越软的档越拿不准
+  function blurFreq(f, blur) {
+    if (!blur) return f;
+    var r = f.r + (Math.random() - 0.5) * blur;
+    var c = f.c + (Math.random() - 0.5) * blur;
+    r = Math.max(0, Math.min(1, r));
+    c = Math.max(0, Math.min(1, c));
+    var s = r + c;
+    if (s > 1) { r /= s; c /= s; }
+    return { r: r, c: c, a: 0, f: 1 - r - c };
+  }
+
+  function preflopRaiseAmount(g, style) {
+    var bb = g.bigBlind, cur = g.streetCurrentBet;
+    var target;
+    if (cur <= bb) target = bb * 2.5;
+    else if (cur <= bb * 4.5) target = cur * 3;
+    else target = cur * 2.3;
+    return Math.round(target * style.sizeMul);
+  }
 
   var SUIT4 = ['s', 'h', 'd', 'c'];
   var RANK_VAL = { 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, T: 10, J: 11, Q: 12, K: 13, A: 14 };
 
-  // 翻前开池范围（AI 用；右侧「起手牌参考」显示的是同一套的自然语言版）
-  var AI_RANGES = {
-    UTG: '55+,ATs+,KQs,AJo+',
-    MP:  '44+,A9s+,KJs+,QJs,ATo+,KJo+',
-    CO:  '22+,A7s+,K9s+,QTs+,JTs,T9s,ATo+,KJo+',
-    BTN: '22+,A2s+,K5s+,Q8s+,J8s+,T8s+,98s+,A7o+,KTo+',
-    SB:  '22+,A2s+,K7s+,Q9s+,J9s+,T9s,A9o+,KJo+',
-    BB:  '22+,A2s+,K9s+,Q9s+,J9s+,T9s,A8o+',
-    'BTN/SB': '22+,A2s+,K2s+,Q5s+,J7s+,T7s+,A2o+,K7o+'
-  };
-
-  function inPreflopRange(hole, posKey) {
-    var spec = AI_RANGES[posKey];
-    if (!spec) return true;
-    var a = Math.max(hole[0].r, hole[1].r);
-    var b = Math.min(hole[0].r, hole[1].r);
-    var suited = hole[0].s === hole[1].s;
-    var items = spec.split(',');
-    for (var i = 0; i < items.length; i++) {
-      var s = items[i].trim();
-      if (!s) continue;
-      var plus = s.slice(-1) === '+';
-      if (plus) s = s.slice(0, -1);
-      if (/^([2-9TJQKA])\1$/.test(s)) {
-        var v = RANK_VAL[s[0]];
-        if (a === b && (plus ? b >= v : b === v)) return true;
-        continue;
-      }
-      var hi = RANK_VAL[s[0]], lo = RANK_VAL[s[1]], sfx = s[2];
-      if (!hi || !lo || a !== hi) continue;
-      if (sfx === 's' && !suited) continue;
-      if (sfx === 'o' && suited) continue;
-      if (plus ? b >= lo : b === lo) return true;
-    }
-    return false;
-  }
+  // 翻前范围现在由 GTO 表提供（见上方 gtoSpot / gtoFreqFor），不再维护手写字符串表。
 
   function cmpEval(x, y) {
     var n = Math.max(x.length, y.length);
@@ -1945,8 +2255,9 @@
 
   // 蒙特卡洛胜率：给自己发若干次「随机对手 + 随机补牌」，统计赢面。
   // 这不是训练——每次都是独立估算，算完就丢。
-  // 对手手牌不是完全随机的：太烂的牌会被排除，否则会高估自己的胜率。
-  function equity(hole, board, nOpp, iters) {
+  // 对手手牌不是完全随机的：oppMin 是「对手至少得有多强」的门槛，
+  // 翻前被加注过就用更高的门槛，否则会拿「对随机牌的胜率」去跟「对强范围的加注」。
+  function equity(hole, board, nOpp, iters, oppMin) {
     var dead = {};
     for (var i = 0; i < hole.length; i++) dead[hole[i].r + hole[i].s] = 1;
     for (var j = 0; j < board.length; j++) dead[board[j].r + board[j].s] = 1;
@@ -1963,7 +2274,7 @@
     for (var it = 0; it < iters; it++) {
       var p = pool.slice();
       var opps = [];
-      for (var o = 0; o < nOpp; o++) opps.push(pickOppHand(p, 0.20));
+      for (var o = 0; o < nOpp; o++) opps.push(pickOppHand(p, oppMin || 0.20));
       var run = [];
       for (var k = 0; k < need; k++) {
         var xr = (Math.random() * p.length) | 0;
@@ -1983,13 +2294,14 @@
     return (win + tie / 2) / iters;
   }
 
-  // 同一街、同一手牌、同一人数，胜率算一次就够
+  // 同一街、同一手牌、同一人数、同一对手强度门槛，胜率算一次就够
   var _eqCache = { key: '', val: 0.5 };
-  function cachedEquity(hole, board, nOpp, iters) {
-    var key = nOpp + '|' + hole[0].r + hole[0].s + hole[1].r + hole[1].s + '|';
+  function cachedEquity(hole, board, nOpp, iters, oppMin) {
+    var om = oppMin || 0.20;
+    var key = nOpp + '|' + om.toFixed(2) + '|' + hole[0].r + hole[0].s + hole[1].r + hole[1].s + '|';
     for (var i = 0; i < board.length; i++) key += board[i].r + board[i].s;
     if (_eqCache.key === key) return _eqCache.val;
-    var val = equity(hole, board, nOpp, iters);
+    var val = equity(hole, board, nOpp, iters, om);
     _eqCache.key = key;
     _eqCache.val = val;
     return val;
@@ -2026,66 +2338,158 @@
 
   function aiDecide(g, seat) {
     var p = g.players[seat];
-    var cfg = AI_PROFILE[g.aiLevel] || AI_PROFILE.normal;
+    var cfg = AI_PROFILE[(_seatLevel[seat] || g.aiLevel)] || AI_PROFILE.normal;
+    var style = styleOf(seat);
     var acts = E.legalActionsFor(g, seat);
     var toCall = g.streetCurrentBet - p.streetBet;
-    var raiseAct = acts.filter(function (a) { return a.type === 'raise'; })[0];
+    var raiseAct = null;
+    for (var ai = 0; ai < acts.length; ai++) if (acts[ai].type === 'raise') { raiseAct = acts[ai]; break; }
     var canRaise = !!raiseAct;
-    var alive = g.players.filter(function (x) { return !x.folded; }).length;
+    var alive = 0;
+    for (var aj = 0; aj < g.players.length; aj++) if (!g.players[aj].folded) alive++;
     var nOpp = Math.max(1, alive - 1);
-    var posKey = posLabel(seat);
 
-    function raiseTo(frac) {
+    function raiseTo(amount) {
       if (!canRaise) return toCall > 0 ? { type: 'call' } : { type: 'check' };
-      var target = Math.round((g.pot + toCall) * frac + g.streetCurrentBet);
-      target = Math.max(raiseAct.min, Math.min(raiseAct.max, target));
-      return { type: 'raise', amount: target };
+      var v = Math.round(amount);
+      if (v < raiseAct.min) v = raiseAct.min;
+      if (v > raiseAct.max) v = raiseAct.max;
+      return { type: 'raise', amount: v };
+    }
+    function betSize(frac) {
+      return g.streetCurrentBet + (g.pot + toCall) * frac * style.sizeMul;
     }
 
-    // ---- 翻前先过范围闸门（不用算胜率，省算力）----
-    if (g.street === 'preflop' && !inPreflopRange(p.hole, posKey)) {
-      if (toCall === 0) return { type: 'check' };
-      var blindPos = posKey === 'BB' || posKey === 'SB' || posKey === 'BTN/SB';
-      if (blindPos && toCall <= g.bigBlind && Math.random() < 0.55) return { type: 'call' };
+    // ---- 难度：手滑。软档会以一定概率不按牌理出牌 ----
+    if (cfg.mistake && Math.random() < cfg.mistake) {
+      var mr = Math.random();
+      if (mr < 0.42 && toCall > 0) return { type: 'fold' };
+      if (mr < 0.78) {
+        if (toCall <= 0) return { type: 'check' };
+        if (toCall <= p.chips * 0.06) return { type: 'call' };
+      }
+      if (canRaise) return raiseTo(betSize(0.6));
+      return toCall > 0 ? { type: 'call' } : { type: 'check' };
+    }
+
+    // ===== 翻前：查 GTO 表 → 风格修正 → 难度模糊 → 掷骰 =====
+    if (g.street === 'preflop') {
+      // 面对 4bet 以上（含全下战）：内置表只解到 3bet，这里必须用极窄范围兜底。
+      // 否则会拿「防守 3bet 的宽范围」去跟人家的全下，比真人松好几倍。
+      var pfR = preflopRaises(g);
+      var betBB = toCall / (g.bigBlind || 20);
+      if ((pfR.length >= 3 || betBB > 14) && toCall > 0) {
+        var hk3 = holeKey(p.hole);
+        var key3 = _seatStyle[seat] || 'balanced';
+        var keep3 = (key3 === 'rock' || key3 === 'weak')
+          ? { AA: 1, KK: 1, QQ: 1, AKs: 1, AKo: 1 }
+          : ((key3 === 'station' || key3 === 'maniac' || key3 === 'lag')
+            ? { AA: 1, KK: 1, QQ: 1, JJ: 1, TT: 1, AKs: 1, AKo: 1, AQs: 1 }
+            : { AA: 1, KK: 1, QQ: 1, JJ: 1, AKs: 1, AKo: 1 });
+        if (!keep3[hk3]) return { type: 'fold' };
+        _lastEq = 0.9;
+        if (toCall >= p.chips * 0.45) return { type: 'allin' };
+        return { type: 'call' };
+      }
+      // 新手不查表：只看自己这手牌「顺不顺眼」，完全不管位置和对手
+      if (cfg.noGto) {
+        var s0 = preflopScore(p.hole);
+        _lastEq = Math.min(1, s0 * 1.25);
+        if (toCall <= 0) {
+          if (canRaise && s0 > 0.58 && Math.random() < 0.45 * style.raiseMul + style.aggrAdd) {
+            return raiseTo(preflopRaiseAmount(g, style));
+          }
+          return { type: 'check' };
+        }
+        if (canRaise && s0 > 0.76) return raiseTo(preflopRaiseAmount(g, style));
+        if (s0 > 0.42 || (toCall <= g.bigBlind && Math.random() < 0.62 * style.enterMul)) return { type: 'call' };
+        return { type: 'fold' };
+      }
+      var freq = gtoFreqFor(g, seat, p.hole);
+      if (freq) {
+        var f = blurFreq(stylePreflop(freq, style), cfg.blur);
+        _lastEq = f.r + f.c;                       // 只用来决定说话语气
+        var roll = Math.random();
+        if (canRaise && roll < f.r) return raiseTo(preflopRaiseAmount(g, style));
+        if (roll < f.r + f.c) return toCall > 0 ? { type: 'call' } : { type: 'check' };
+        if (toCall <= 0) return { type: 'check' };
+        return { type: 'fold' };
+      }
+      // 表未覆盖（大盲无人加注、冷跟等）：牌力兜底
+      var sc = preflopScore(p.hole);
+      _lastEq = Math.min(1, sc * 1.25);
+      if (toCall <= 0) {
+        if (canRaise && sc > 0.60 && Math.random() < 0.35 * style.raiseMul + style.aggrAdd) {
+          return raiseTo(preflopRaiseAmount(g, style));
+        }
+        return { type: 'check' };
+      }
+      if (canRaise && sc > 0.74) return raiseTo(preflopRaiseAmount(g, style));
+      if (sc > 0.44 || (toCall <= g.bigBlind && Math.random() < 0.55 * style.enterMul)) return { type: 'call' };
       return { type: 'fold' };
     }
 
-    var eq = cachedEquity(p.hole, g.board, nOpp, cfg.iters);
+    // ===== 翻后：蒙特卡洛胜率 + 风格 =====
+    // 对手范围强度：翻前加注过的人更可能有牌，采样门槛跟着抬高
+    var pfRaiseCount = preflopRaises(g).length;
+    var oppMin = cfg.pro
+      ? (pfRaiseCount >= 2 ? 0.48 : (pfRaiseCount === 1 ? 0.35 : 0.19))
+      : (pfRaiseCount >= 2 ? 0.42 : (pfRaiseCount === 1 ? 0.30 : 0.16));
+    var eq = cachedEquity(p.hole, g.board, nOpp, cfg.iters, oppMin);
     var potOdds = toCall > 0 ? toCall / (g.pot + toCall) : 0;
 
-    // 软档的「失误」：以一定概率不看牌力乱做，所以新手档明显好打
-    if (cfg.mistake && Math.random() < cfg.mistake) {
-      var r = Math.random();
-      if (r < 0.45 && toCall > 0) return { type: 'fold' };
-      if (r < 0.80 && toCall <= p.chips * 0.06) return { type: 'call' };
-      if (canRaise) return raiseTo(0.6);
-      return toCall > 0 ? { type: 'call' } : { type: 'check' };
-    }
-
-    // 面对下注时，对手范围不是随机的：下注越大越像有牌，自己的胜率要打折。
-    // 不打这个折，AI 会拿「对随机牌的胜率」去跟「对强范围的加注」，越准越亏。
+    // 面对下注时对手范围还会更集中在强牌上，按下注压力再补一点折扣
     if (toCall > 0) {
       var pressure = toCall / (g.pot || 1);
-      eq *= pressure > 0.6 ? 0.84 : (pressure > 0.25 ? 0.91 : 0.96);
+      eq *= pressure > 0.6 ? 0.88 : (pressure > 0.25 ? 0.93 : 0.97);
     }
 
-    // ---- 面对下注且胜率不够付价格：弃，但保留诈唬和「软档犯错」 ----
-    var minEq = potOdds + 0.06 + (nOpp - 1) * 0.04;
+    // 读人：桌上紧手多 → 尊重他们的下注；松鱼多 → 价值下注更薄、少诈唬
+    var read = cfg.noRead ? { n: 0, avgVpip: 0, loose: 0, tight: 0 } : tableRead(seat);
+    var myMind = mindOf(seat);
+    _lastEq = eq;
+
+    // 风格改变弃牌线：跟注站 callMul 大 → 弃牌线低；紧弱 callMul 小 → 容易弃
+    var minEq = cfg.noOdds
+      ? (0.34 + (nOpp - 1) * 0.05) / Math.max(0.5, style.callMul)
+      : (potOdds + 0.06 + (nOpp - 1) * 0.04) / Math.max(0.45, style.callMul);
+    if (read.tight > 0) minEq += 0.035 * Math.min(3, read.tight);      // 对面有紧手在加注，收着点
+    if (read.loose > 0) minEq -= 0.02 * Math.min(3, read.loose);       // 对面全是跟注站，能便宜看牌就看
+    if (myMind.tilt > 0.08) minEq *= (1 - myMind.tilt * 0.25);         // 上头了，弃不掉牌
+    if (cfg.scare && toCall > g.pot * 0.30 && eq < cfg.scare) return { type: 'fold' };
     if (toCall > 0 && eq < minEq) {
-      if (canRaise && Math.random() < cfg.bluff && toCall <= g.pot * 0.5) return raiseTo(0.62);
-      if (Math.random() < cfg.mistake && toCall <= p.chips * 0.05) return { type: 'call' };
+      // 跟注站不吃诈唬：桌上松鱼越多，越少做无谓的诈唬加注
+      var bluffChance = cfg.noGto ? 0 : (0.05 * style.bluffMul * Math.max(0.2, 1 - read.loose * 0.35));
+      if (canRaise && Math.random() < bluffChance && toCall <= g.pot * 0.5) return raiseTo(betSize(0.55));
       return { type: 'fold' };
     }
 
-    // ---- 有价值：按胜率决定加注还是跟注 ----
-    var raiseLine = 0.62 + (nOpp - 1) * 0.055;
+    // 有价值：按胜率决定加注还是跟注
+    var raiseLine = 0.50 + (nOpp - 1) * 0.045;
+    if (read.loose > 0) raiseLine -= 0.04;      // 对面会用弱牌跟，价值打薄一点也能收钱
+    if (read.tight > 0) raiseLine += 0.02;      // 紧手只会用强牌接，别自己往枪口上撞
     if (eq > raiseLine && canRaise) {
-      var raiseProb = eq > 0.80 ? 0.80 : 0.42;
-      if (Math.random() < raiseProb + 0.18 * cfg.aggr) return raiseTo(betFrac(eq));
+      // 本街已经打到很大时（有人加过注），中等牌只跟不顶，免得加注战无限升级
+      if (toCall > g.pot * 0.75 && eq < 0.88) return { type: 'call' };
+      var raiseProb = eq > 0.78 ? 0.82 : 0.55;
+      raiseProb = Math.max(0, Math.min(0.78, raiseProb * style.raiseMul + style.aggrAdd));
+      if (myMind.tilt > 0.08) raiseProb = Math.min(0.95, raiseProb + myMind.tilt * 0.20);
+      if (cfg.noGto) raiseProb *= 0.5;   // 新手偏向跟注看牌，不爱主动加注
+      if (Math.random() < raiseProb) return raiseTo(betSize(betFrac(eq)));
       return toCall > 0 ? { type: 'call' } : { type: 'check' };
     }
+    if (cfg.pro && canRaise && toCall === 0 && eq > 0.52 && eq <= raiseLine) {
+      if (Math.random() < 0.38) return raiseTo(betSize(0.33));
+    }
     if (toCall > 0) return { type: 'call' };
-    if (canRaise && Math.random() < cfg.bluff) return raiseTo(0.5);
+    // 无人下注：翻前最后加注者做持续下注（C-bet），其他人少量偷池。
+    // 没有这一层，AI 会一路过牌到摊牌，跟真人差距最大。
+    var pfList = preflopRaises(g);
+    var aggressor = pfList.length > 0 && pfList[pfList.length - 1].playerId === seat;
+    var cbet = aggressor ? (nOpp <= 1 ? 0.62 : 0.38) : 0.13;
+    cbet *= Math.max(0.35, 1 - read.loose * 0.18);    // 跟注站不弃牌，C-bet 收益低
+    if (myMind.tilt > 0.08) cbet += myMind.tilt * 0.15;
+    if (canRaise && Math.random() < Math.min(0.85, cbet * style.bluffMul)) return raiseTo(betSize(0.55));
     return { type: 'check' };
   }
 
@@ -2105,13 +2509,29 @@
       render();
       if (game.handOver) onHandEnd();
       else scheduleAI();
-    }, 420 + Math.random() * 380);
+    }, thinkDelay(game, seat));
+  }
+
+  // 思考时长：真人不是每次都匀速。底池大、牌力边缘会多想一会儿，明显弃牌秒弃。
+  function thinkDelay(g, seat) {
+    var base = 340 + Math.random() * 300;
+    var potBB = (g.pot || 0) / (g.bigBlind || 20);
+    if (potBB > 30) base += 320 + Math.random() * 520;
+    else if (potBB > 12) base += 130 + Math.random() * 260;
+    // 边缘牌（胜率四六开）最费脑子
+    if (_lastEq > 0.34 && _lastEq < 0.66) base += 200 + Math.random() * 320;
+    var st = _seatStyle[seat];
+    if (st === 'station' || st === 'weak') base *= 1.15;
+    if (st === 'tag' || st === 'lag') base *= 0.88;
+    if (st === 'maniac') base *= 0.75;
+    return Math.round(base);
   }
 
   // ---------------- 一手结束 ----------------
   function onHandEnd() {
     if (resultShown) return;
     resultShown = true;
+    updateMind(game);
     saveHand();
     saveSettings({ chips: game.players[0].chips, hands: game.handsPlayed, rebuys: game.rebuys });
     showResult();
@@ -2127,6 +2547,7 @@
       newGame();
       return;
     }
+    snapshotChips(game);
     syncRebuyEvents();
     render();
     scheduleAI();
@@ -2179,7 +2600,115 @@
   }
   function closeModal() {
     $('overlay').classList.remove('show');
+    $('modal').classList.remove('wide');
     if (typeof replayTimer !== 'undefined' && replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  }
+
+  // ---------------- GTO 翻前表查看器 ----------------
+  var GTO_SPOT_ORDER = [
+    'rfi/UTG', 'rfi/UTG1', 'rfi/LJ', 'rfi/HJ', 'rfi/CO', 'rfi/BTN', 'rfi/SB',
+    'vs-open/EP-vs-BTN', 'vs-open/EP-vs-SB', 'vs-open/EP-vs-BB', 'vs-open/EP-vs-MP',
+    'vs-open/MP-vs-BTN', 'vs-open/MP-vs-SB', 'vs-open/MP-vs-BB',
+    'vs-open/BTN-vs-SB', 'vs-open/BTN-vs-BB', 'vs-open/SB-vs-BB',
+    'vs-open/cold-BTN', 'vs-open/cold-BB', 'vs-open/BB-vs-SBlimp',
+    'vs-open/EPopen-vs-IP3bet', 'vs-open/EPopen-vs-blind3bet',
+    'vs-open/MPopen-vs-IP3bet', 'vs-open/MPopen-vs-blind3bet',
+    'vs-open/BTNopen-vs-blind3bet', 'vs-open/SBopen-vs-BB3bet'
+  ];
+  var GTO_LABELS = {
+    'rfi/UTG': '开池 · UTG 枪口',
+    'rfi/UTG1': '开池 · UTG1',
+    'rfi/LJ': '开池 · LJ 低劫',
+    'rfi/HJ': '开池 · HJ 劫位',
+    'rfi/CO': '开池 · CO 关位',
+    'rfi/BTN': '开池 · BTN 按钮',
+    'rfi/SB': '开池 · SB 小盲',
+    'vs-open/EP-vs-BTN': '应对开池 · MP 开局，你在 BTN',
+    'vs-open/EP-vs-SB': '应对开池 · MP 开局，你在 SB',
+    'vs-open/EP-vs-BB': '应对开池 · MP 开局，你在 BB',
+    'vs-open/EP-vs-MP': '应对开池 · MP 开局，你在 CO',
+    'vs-open/MP-vs-BTN': '应对开池 · CO 开局，你在 BTN',
+    'vs-open/MP-vs-SB': '应对开池 · CO 开局，你在 SB',
+    'vs-open/MP-vs-BB': '应对开池 · CO 开局，你在 BB',
+    'vs-open/BTN-vs-SB': '应对开池 · BTN 开局，你在 SB',
+    'vs-open/BTN-vs-BB': '应对开池 · BTN 开局，你在 BB',
+    'vs-open/SB-vs-BB': '应对开池 · SB 开局，你在 BB',
+    'vs-open/cold-BTN': '冷跟 · 前面开池，你在 BTN',
+    'vs-open/cold-BB': '冷跟 · 前面开池，你在 BB',
+    'vs-open/BB-vs-SBlimp': '应对平跟 · SB 平跟，你在 BB',
+    'vs-open/EPopen-vs-IP3bet': '应对 3bet · MP 开，你 BTN 3bet 后被 4bet',
+    'vs-open/EPopen-vs-blind3bet': '应对 3bet · MP 开，你 BB 3bet 后被 4bet',
+    'vs-open/MPopen-vs-IP3bet': '应对 3bet · CO 开，你 BTN 3bet 后被 4bet',
+    'vs-open/MPopen-vs-blind3bet': '应对 3bet · CO 开，你 BB 3bet 后被 4bet',
+    'vs-open/BTNopen-vs-blind3bet': '应对 3bet · BTN 开，你 BB 3bet 后被 4bet',
+    'vs-open/SBopen-vs-BB3bet': '应对 3bet · SB 开，你 BB 3bet 后被 4bet'
+  };
+
+  function gtoCellColor(f) {
+    var raise = f.r + f.a;
+    if (raise > 0.85) return '#c0392b';
+    if (raise > 0.55) return '#d35400';
+    if (raise > 0.25) return '#9c640c';
+    if (raise > 0.02) return '#5d4037';
+    if (f.c > 0.5) return '#2471a3';
+    if (f.c > 0.02) return '#1b4f6b';
+    return '#2f3542';
+  }
+
+  function drawGtoGrid(spotKey) {
+    var box = $('gtoGrid');
+    if (!box) return;
+    var arr = GTO.spots[spotKey];
+    if (!arr) { box.innerHTML = ''; return; }
+    var html = '';
+    for (var i = 0; i < GTO.hands.length; i++) {
+      var key = GTO.hands[i];
+      var f = parseGtoCode(arr[i]);
+      var raise = f.r + f.a;
+      var main, pctTxt;
+      if (raise >= f.c && raise >= f.f) { main = 'R'; pctTxt = Math.round(raise * 100); }
+      else if (f.c >= f.f) { main = 'C'; pctTxt = Math.round(f.c * 100); }
+      else { main = 'F'; pctTxt = 0; }
+      html += '<div class="gto-cell" style="background:' + gtoCellColor(f) + '"' +
+        ' title="' + key + '：加注 ' + Math.round(raise * 100) + '% / 跟注 ' +
+        Math.round(f.c * 100) + '% / 弃牌 ' + Math.round(f.f * 100) + '%">' +
+        '<b>' + key + '</b>' +
+        (main === 'F' ? '' : '<i>' + main + pctTxt + '</i>') +
+        '</div>';
+    }
+    box.innerHTML = html;
+  }
+
+  function showGto() {
+    if (!GTO || !GTO.spots) {
+      openModal('<h3>GTO 翻前表</h3><p>数据文件 gto-data.js 未加载成功。</p>' +
+        '<div class="actions"><button class="btn check" id="btnCloseGto">关闭</button></div>');
+      $('btnCloseGto').onclick = closeModal;
+      return;
+    }
+    var keys = [];
+    for (var i = 0; i < GTO_SPOT_ORDER.length; i++) {
+      if (GTO.spots[GTO_SPOT_ORDER[i]]) keys.push(GTO_SPOT_ORDER[i]);
+    }
+    var cur = game && !game.handOver ? gtoSpot(game, 0) : null;
+    if (!cur || !GTO.spots[cur]) cur = keys[0];
+    var opts = '';
+    for (var j = 0; j < keys.length; j++) {
+      opts += '<option value="' + keys[j] + '"' + (keys[j] === cur ? ' selected' : '') + '>' +
+        (GTO_LABELS[keys[j]] || keys[j]) + '</option>';
+    }
+    var html = '<h3>GTO 翻前表</h3>' +
+      '<div class="gto-bar"><select id="gtoSpotSel">' + opts + '</select>' +
+      '<span class="gto-note">红=加注　蓝=跟注　深灰=弃牌；格内 R/C 是主要动作与频率</span></div>' +
+      '<div class="gto-note" style="margin-bottom:10px">数据：8-max MTT 翻前解（matthiola0/poker-hand-review，MIT）。' +
+      '6 人桌与单挑按「后面还剩几人」映射到最接近的位置，单挑时引擎会再按经验放宽进入率，' +
+      '所以这里看到的是未经放宽的原始表，可以用来学「为什么这手牌该开」。</div>' +
+      '<div class="gto-grid" id="gtoGrid"></div>' +
+      '<div class="actions"><button class="btn check" id="btnCloseGto">关闭</button></div>';
+    openModal(html);
+    $('btnCloseGto').onclick = closeModal;
+    $('gtoSpotSel').onchange = function () { drawGtoGrid(this.value); };
+    drawGtoGrid(cur);
   }
 
   // ---------------- 复盘讲评 ----------------
@@ -2993,6 +3522,7 @@
   $('btnStats').onclick = showStats;
   $('btnSettings').onclick = showSettings;
   $('btnGuide').onclick = function () { showGuide(); };
+  $('btnGto').onclick = function () { $('modal').classList.add('wide'); showGto(); };
 
   // ---------------- 手机端：信息抽屉与更多菜单 ----------------
   function toggleInfo(force) {
@@ -3005,6 +3535,7 @@
 
   function showMoreMenu() {
     var items = [
+      ['gto', 'GTO 翻前表'],
       ['guide', '规则教学'],
       ['settings', '设置'],
       ['stats', '统计'],
@@ -3022,7 +3553,8 @@
       b.onclick = function () {
         var act = b.getAttribute('data-act');
         closeModal();
-        if (act === 'guide') showGuide();
+        if (act === 'gto') { $('modal').classList.add('wide'); showGto(); }
+        else if (act === 'guide') showGuide();
         else if (act === 'settings') showSettings();
         else if (act === 'stats') showStats();
         else if (act === 'history') showHistory();
