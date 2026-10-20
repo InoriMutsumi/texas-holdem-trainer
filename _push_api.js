@@ -65,7 +65,11 @@ async function call(method, url, body) {
       continue;
     }
     const file = parts[parts.length - 1];
-    const buf = fs.readFileSync(path.join(__dirname, file));
+    let buf = fs.readFileSync(path.join(__dirname, file));
+    // 文本文件统一转成 LF 再推，避免 CRLF 让远程判成「整个文件都变了」
+    if (!/\.(png|jpe?g|gif|ico|webp|woff2?|ttf)$/i.test(file)) {
+      buf = Buffer.from(buf.toString('utf8').split('\r\n').join('\n'), 'utf8');
+    }
     const blob = await call('POST', API + '/git/blobs', {
       content: buf.toString('base64'),
       encoding: 'base64',

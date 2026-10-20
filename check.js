@@ -69,7 +69,10 @@ const documentStub = {
   getElementById: getEl,
   createElement: makeEl,
   querySelectorAll: () => [],
-  addEventListener() {}
+  querySelector: () => null,
+  addEventListener() {},
+  removeEventListener() {},
+  body: makeEl('body')
 };
 const storage = {};
 const localStorageStub = {
@@ -80,6 +83,7 @@ const localStorageStub = {
 const sandbox = {
   console,
   document: documentStub,
+  location: { search: '' },
   localStorage: localStorageStub,
   setTimeout: (fn) => { fn(); return 0; },   // AI 立即行动，便于同步冒烟
   clearTimeout: () => {},

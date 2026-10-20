@@ -5,12 +5,38 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>德州扑克 · 单挑练习</title>
 <style>
+  /* ================= 主题变量 ================= */
+  :root {
+    --bg1: #16241e; --bg2: #08100c;
+    --felt-a: #1d6b47; --felt-b: #0f3f2b; --felt-c: #0a2b1e;
+    --rim: #2a1a12;
+    --text: #e8efe9; --text-dim: #9fb3a8; --text-soft: #cfe0d6;
+    --gold: #ffd479; --accent: #2f7a58; --accent-2: #3f9b6f;
+    --panel: rgba(0,0,0,.35); --line: rgba(255,255,255,.07);
+    --win: #7ee2a8; --lose: #e08a8a;
+    --card-back-a: #24463a; --card-back-b: #1c3a30;
+  }
+  body[data-theme="blue"] {
+    --bg1: #101a2c; --bg2: #070b14;
+    --felt-a: #1b4f7a; --felt-b: #0f3156; --felt-c: #0a2340;
+    --rim: #17222f;
+    --accent: #2f6a9a; --accent-2: #3f86b8;
+    --card-back-a: #23405e; --card-back-b: #1b3349;
+  }
+  body[data-theme="wood"] {
+    --bg1: #2a1d12; --bg2: #120c07;
+    --felt-a: #2f6b3a; --felt-b: #24512e; --felt-c: #16341f;
+    --rim: #4a2c18;
+    --gold: #f0c060; --accent: #b8752f; --accent-2: #d08c42;
+    --card-back-a: #5a3f26; --card-back-b: #48301c;
+  }
+
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; }
   body {
     font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
-    background: radial-gradient(circle at 50% 20%, #16241e, #08100c 70%);
-    color: #e8efe9;
+    background: radial-gradient(circle at 50% 20%, var(--bg1), var(--bg2) 70%);
+    color: var(--text);
     min-width: 1280px;
     overflow: hidden;
     user-select: none;
@@ -25,13 +51,13 @@
     border-bottom: 1px solid rgba(255,255,255,.07);
     font-size: 13px;
   }
-  .topbar .brand { font-weight: 700; color: #ffd479; letter-spacing: 1px; }
-  .topbar .stat { color: #9fb3a8; }
-  .topbar .stat b { color: #e8efe9; font-weight: 600; }
+  .topbar .brand { font-weight: 700; color: var(--gold); letter-spacing: 1px; }
+  .topbar .stat { color: var(--text-dim); }
+  .topbar .stat b { color: var(--text); font-weight: 600; }
   .topbar .spacer { flex: 1; }
   .topbar .btn-mini {
     background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
-    color: #cfe0d6; padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
+    color: var(--text-soft); padding: 5px 12px; border-radius: 6px; cursor: pointer; font-size: 12px;
   }
   .topbar .btn-mini:hover { background: rgba(255,255,255,.15); }
   .seg { display: inline-flex; border: 1px solid rgba(255,255,255,.14); border-radius: 7px; overflow: hidden; }
@@ -39,15 +65,24 @@
     background: transparent; border: 0; color: #8fa79a; font-size: 12px;
     padding: 4px 11px; cursor: pointer; font-family: inherit;
   }
-  .seg button:hover { color: #cfe0d6; }
-  .seg button.on { background: #2f7a58; color: #eafff3; }
+  .seg button:hover { color: var(--text-soft); }
+  .seg button.on { background: var(--accent); color: #eafff3; }
   .ai-level select {
-    background: #16241d; color: #cfe0d6; border: 1px solid rgba(255,255,255,.16);
+    background: #16241d; color: var(--text-soft); border: 1px solid rgba(255,255,255,.16);
     border-radius: 6px; padding: 3px 6px; font-size: 12px; font-family: inherit;
     cursor: pointer; outline: none;
   }
   .msg-toggle { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
   .msg-toggle input { accent-color: #2f7a58; cursor: pointer; margin: 0; }
+  .theme-pick { display: inline-flex; gap: 6px; }
+  .theme-btn {
+    background: rgba(255,255,255,.07); border: 1px solid var(--line);
+    color: var(--text-soft); padding: 4px 10px; border-radius: 6px;
+    cursor: pointer; font-size: 12px; font-family: inherit;
+  }
+  .theme-btn:hover { background: rgba(255,255,255,.14); }
+  .theme-btn.on { background: var(--accent); color: #fff; border-color: transparent; }
+  #setMusicVol, #setSfxVol { width: 140px; accent-color: var(--accent); }
 
   /* ---------- 主区 ---------- */
   .main { flex: 1; display: flex; min-height: 0; }
@@ -59,9 +94,9 @@
   }
   .felt {
     position: absolute; inset: 40px 40px;
-    background: radial-gradient(ellipse at 50% 45%, #1d6b47, #0f3f2b 70%, #0a2b1e);
+    background: radial-gradient(ellipse at 50% 45%, var(--felt-a), var(--felt-b) 70%, var(--felt-c));
     border-radius: 240px;
-    border: 10px solid #2a1a12;
+    border: 10px solid var(--rim);
     box-shadow: inset 0 0 60px rgba(0,0,0,.55), 0 14px 40px rgba(0,0,0,.6);
   }
 
@@ -83,18 +118,18 @@
     font-size: 22px; transition: border-color .2s, box-shadow .2s; flex: none;
   }
   .seat.me .avatar { width: 52px; height: 52px; font-size: 26px; }
-  .avatar.active { border-color: #ffd479; box-shadow: 0 0 0 3px rgba(255,212,121,.25); }
+  .avatar.active { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(255,212,121,.25); }
   .avatar.out { filter: grayscale(1) brightness(.55); }
   .avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
   .avatar.mine { cursor: pointer; }
-  .avatar.mine:hover { border-color: #ffd479; }
-  .seat .who { font-size: 12px; color: #cfe0d6; text-align: left; }
-  .seat .chips { font-size: 14px; font-weight: 700; color: #ffd479; margin-top: 1px; text-align: left; }
+  .avatar.mine:hover { border-color: var(--gold); }
+  .seat .who { font-size: 12px; color: var(--text-soft); text-align: left; }
+  .seat .chips { font-size: 14px; font-weight: 700; color: var(--gold); margin-top: 1px; text-align: left; }
   .seat .style-tag { display: none; font-size: 10px; line-height: 15px; padding: 0 5px; margin-top: 2px; border-radius: 4px; background: rgba(120, 200, 255, .16); color: #8fd4ff; text-align: left; width: fit-content; }
   .seat.me .who { font-size: 13px; }
   .seat.me .chips { font-size: 15px; }
   .seat .pos-tag {
-    display: inline-block; font-size: 11px; color: #9fb3a8;
+    display: inline-block; font-size: 11px; color: var(--text-dim);
     border: 1px solid rgba(255,255,255,.15); border-radius: 4px; padding: 0 5px; margin-left: 4px;
   }
   .seat .folded-mark { font-size: 11px; color: #8a9a92; margin-top: 2px; }
@@ -112,7 +147,7 @@
   .seat .bet-pill {
     position: absolute; left: 50%; transform: translateX(-50%); bottom: -14px;
     background: rgba(255,212,121,.15); border: 1px solid rgba(255,212,121,.4);
-    color: #ffd479; font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap;
+    color: var(--gold); font-size: 12px; padding: 1px 8px; border-radius: 10px; white-space: nowrap;
   }
   .dealer-btn {
     position: absolute; left: -10px; top: 30px; width: 22px; height: 22px; border-radius: 50%;
@@ -128,7 +163,7 @@
   .center { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 12px; }
   .pot-box {
     background: rgba(0,0,0,.45); border: 1px solid rgba(255,212,121,.25);
-    border-radius: 20px; padding: 4px 18px; font-size: 14px; color: #ffd479;
+    border-radius: 20px; padding: 4px 18px; font-size: 14px; color: var(--gold);
   }
   .pot-box b { font-size: 18px; }
   .board { display: flex; gap: 8px; min-height: 78px; align-items: center; }
@@ -148,7 +183,7 @@
   .card.small .rk { font-size: 16px; }
   .card.small .su { font-size: 15px; }
   .card.back {
-    background: repeating-linear-gradient(45deg, #24463a, #24463a 6px, #1c3a30 6px, #1c3a30 12px);
+    background: repeating-linear-gradient(45deg, var(--card-back-a), var(--card-back-a) 6px, var(--card-back-b) 6px, var(--card-back-b) 12px);
     color: transparent;
   }
   .card.empty { background: transparent; box-shadow: none; border: 1px dashed rgba(255,255,255,.12); }
@@ -162,15 +197,15 @@
   }
   .info-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
   .info-section h4 { font-size: 12px; color: #7f9489; font-weight: 500; margin-bottom: 8px; letter-spacing: 1px; }
-  .info-row { display: flex; justify-content: space-between; padding: 3px 0; color: #cfe0d6; }
-  .info-row b { color: #ffd479; }
-  .hand-tip { font-size: 12px; color: #9fb3a8; line-height: 1.65; }
+  .info-row { display: flex; justify-content: space-between; padding: 3px 0; color: var(--text-soft); }
+  .info-row b { color: var(--gold); }
+  .hand-tip { font-size: 12px; color: var(--text-dim); line-height: 1.65; }
   .log {
-    flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 12px; line-height: 1.6; color: #9fb3a8;
+    flex: 1; overflow-y: auto; padding: 8px 12px; font-size: 12px; line-height: 1.6; color: var(--text-dim);
   }
   .log .l { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
-  .log .l b { color: #cfe0d6; }
-  .log .l.street-mark { color: #ffd479; margin-top: 6px; }
+  .log .l b { color: var(--text-soft); }
+  .log .l.street-mark { color: var(--gold); margin-top: 6px; }
 
   /* ---------- 底栏 ---------- */
   .actionbar {
@@ -184,7 +219,8 @@
     border: none; border-radius: 9px; padding: 12px 22px; font-size: 15px; font-weight: 600;
     cursor: pointer; transition: filter .15s, transform .05s; color: #10201a;
   }
-  .btn:active { transform: translateY(1px); }
+  .btn:hover:not(:disabled) { filter: brightness(1.07); }
+  .btn:active { transform: translateY(1px) scale(.99); }
   .btn:disabled { opacity: .35; cursor: not-allowed; }
   .btn.fold { background: #7a4a4a; color: #f3e6e6; }
   .btn.check { background: #4a7a63; color: #e9f5ef; }
@@ -194,8 +230,8 @@
   .btn:hover:not(:disabled) { filter: brightness(1.12); }
   .raise-panel { display: flex; align-items: center; gap: 10px; }
   .raise-panel input[type=range] { width: 180px; accent-color: #d9a641; }
-  .raise-panel .amt { font-weight: 700; color: #ffd479; min-width: 70px; text-align: center; }
-  .odds-hint { font-size: 12px; color: #9fb3a8; max-width: 260px; }
+  .raise-panel .amt { font-weight: 700; color: var(--gold); min-width: 70px; text-align: center; }
+  .odds-hint { font-size: 12px; color: var(--text-dim); max-width: 260px; }
 
   /* ---------- 弹层 ---------- */
   .overlay {
@@ -208,7 +244,7 @@
     padding: 22px 26px; width: 560px; max-height: 80vh; overflow-y: auto;
     box-shadow: 0 20px 60px rgba(0,0,0,.7);
   }
-  .modal h3 { font-size: 17px; color: #ffd479; margin-bottom: 14px; }
+  .modal h3 { font-size: 17px; color: var(--gold); margin-bottom: 14px; }
   .modal.wide { width: 760px; max-width: 94vw; }
   .gto-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
   .gto-bar select { background: #1d2f27; color: #dbe7df; border: 1px solid rgba(255,255,255,.14); border-radius: 8px; padding: 6px 10px; font-size: 13px; max-width: 100%; }
@@ -217,6 +253,11 @@
   .gto-cell { aspect-ratio: 1 / 1; border-radius: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden; }
   .gto-cell b { font-size: 10px; color: #fff; font-weight: 700; line-height: 1.1; }
   .gto-cell i { font-style: normal; font-size: 8px; color: rgba(255,255,255,.82); line-height: 1.1; }
+  .modal { animation: popIn .22s cubic-bezier(.2,.9,.3,1.2) both; }
+  @keyframes popIn {
+    from { opacity: 0; transform: translateY(10px) scale(.985); }
+    to { opacity: 1; transform: none; }
+  }
   .modal .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,.06); }
   .modal .row .win { color: #6fcf97; font-weight: 700; }
   .modal .row .lose { color: #eb5757; }
@@ -235,13 +276,13 @@
   }
   .modal .replay-line .rp-street { color: #7f9489; width: 42px; flex: none; }
   .modal .replay-line .rp-who {
-    color: #cfe0d6; width: 92px; flex: none;
+    color: var(--text-soft); width: 92px; flex: none;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .modal .replay-line .rp-act { color: #ffd479; flex: 1; }
+  .modal .replay-line .rp-act { color: var(--gold); flex: 1; }
   .modal .replay-line .rp-pot { color: #7f9489; flex: none; }
   .modal .replay-board {
-    font-size: 12px; color: #9fb3a8; padding: 6px 0 4px;
+    font-size: 12px; color: var(--text-dim); padding: 6px 0 4px;
     letter-spacing: 1px; border-top: 1px dashed rgba(255,255,255,.06); margin-top: 4px;
   }
   .modal .replay-ctrl { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
@@ -249,17 +290,17 @@
   .modal .rv-step { margin-left: auto; font-size: 12px; color: #7f9489; }
   .modal .replay-pots {
     display: flex; flex-wrap: wrap; gap: 6px 14px;
-    font-size: 12px; color: #9fb3a8; padding: 4px 0 8px;
+    font-size: 12px; color: var(--text-dim); padding: 4px 0 8px;
   }
-  .modal .replay-pots .rv-pot-item.now { color: #ffd479; }
-  .modal .replay-pots .rv-pot-item.now b { color: #ffd479; }
-  .modal .replay-pots b { color: #cfe0d6; font-weight: 700; }
+  .modal .replay-pots .rv-pot-item.now { color: var(--gold); }
+  .modal .replay-pots .rv-pot-item.now b { color: var(--gold); }
+  .modal .replay-pots b { color: var(--text-soft); font-weight: 700; }
   .modal .replay-list { max-height: 200px; overflow-y: auto; }
   .modal .replay-line.now { background: rgba(255,212,121,.10); }
   .modal .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 6px 0 4px; }
   .modal .stat-cell { background: rgba(255,255,255,.03); border-radius: 8px; padding: 10px 12px; }
   .modal .sc-label { font-size: 12px; color: #7f9489; }
-  .modal .sc-value { font-size: 20px; font-weight: 700; color: #ffd479; margin: 2px 0; }
+  .modal .sc-value { font-size: 20px; font-weight: 700; color: var(--gold); margin: 2px 0; }
   .modal .sc-tip { font-size: 11px; color: #6f8479; }
   .modal .curve {
     display: block; width: 100%; height: auto;
@@ -267,17 +308,17 @@
   }
   .modal .note-box {
     width: 100%; box-sizing: border-box; resize: vertical; min-height: 60px;
-    background: rgba(0,0,0,.28); color: #cfe0d6; border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.28); color: var(--text-soft); border: 1px solid rgba(255,255,255,.12);
     border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.6;
     font-family: inherit;
   }
-  .modal .note-box:focus { outline: none; border-color: #ffd479; }
+  .modal .note-box:focus { outline: none; border-color: var(--gold); }
   .modal .num-input {
     width: 90px; text-align: right; font-size: 14px;
-    background: rgba(0,0,0,.28); color: #ffd479; border: 1px solid rgba(255,255,255,.12);
+    background: rgba(0,0,0,.28); color: var(--gold); border: 1px solid rgba(255,255,255,.12);
     border-radius: 6px; padding: 4px 8px; font-family: inherit;
   }
-  .modal .num-input:focus { outline: none; border-color: #ffd479; }
+  .modal .num-input:focus { outline: none; border-color: var(--gold); }
   .modal .avatar-grid {
     display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 8px 0;
   }
@@ -286,16 +327,16 @@
     background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.10);
     border-radius: 10px; font-family: inherit;
   }
-  .modal .avatar-pick:hover { border-color: #ffd479; background: rgba(255,212,121,.10); }
+  .modal .avatar-pick:hover { border-color: var(--gold); background: rgba(255,212,121,.10); }
   .modal .more-list { display: flex; flex-direction: column; gap: 8px; }
   .modal .more-item {
     background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.10);
-    color: #cfe0d6; padding: 14px 16px; border-radius: 10px; font-size: 15px;
+    color: var(--text-soft); padding: 14px 16px; border-radius: 10px; font-size: 15px;
     font-family: inherit; cursor: pointer; text-align: left;
   }
   .modal .more-item:hover { background: rgba(255,255,255,.12); }
   .modal .review-title {
-    margin: 14px 0 8px; font-weight: 700; color: #ffd479; font-size: 13px;
+    margin: 14px 0 8px; font-weight: 700; color: var(--gold); font-size: 13px;
     border-top: 1px solid rgba(255,255,255,.08); padding-top: 12px;
   }
   .modal .review-item {
@@ -307,7 +348,7 @@
   .modal .review-item.mistake { border-left-color: #d0685a; }
   .modal .review-item .rv-tag {
     display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px;
-    background: rgba(255,255,255,.08); margin-right: 6px; color: #cfe0d6;
+    background: rgba(255,255,255,.08); margin-right: 6px; color: var(--text-soft);
   }
   .modal .review-item.good .rv-tag { color: #7fe0a8; }
   .modal .review-item.mistake .rv-tag { color: #ff9a8a; }
@@ -315,7 +356,7 @@
   .modal .review-item .rv-assume { font-size: 11px; color: #7f9489; margin-top: 3px; }
   .modal .rv-jump {
     margin-left: 6px; padding: 1px 8px; font-size: 11px; cursor: pointer;
-    background: rgba(255,212,121,.12); color: #ffd479;
+    background: rgba(255,212,121,.12); color: var(--gold);
     border: 1px solid rgba(255,212,121,.35); border-radius: 10px;
     font-family: inherit;
   }
@@ -324,21 +365,21 @@
   .modal .guide-tab {
     padding: 5px 14px; border-radius: 999px; font-size: 13px; cursor: pointer;
     background: rgba(255,255,255,.05); border: 1px solid transparent;
-    color: #9fb3a8; font-family: inherit;
+    color: var(--text-dim); font-family: inherit;
   }
   .modal .guide-tab.on {
-    background: rgba(255,212,121,.14); border-color: rgba(255,212,121,.4); color: #ffd479;
+    background: rgba(255,212,121,.14); border-color: rgba(255,212,121,.4); color: var(--gold);
   }
-  .modal .guide-body { font-size: 13px; line-height: 1.8; color: #cfe0d6; }
+  .modal .guide-body { font-size: 13px; line-height: 1.8; color: var(--text-soft); }
   .modal .guide-body p { margin: 6px 0; }
   .modal .guide-body h4 {
-    margin: 16px 0 6px; color: #ffd479; font-size: 14px; font-weight: 700;
+    margin: 16px 0 6px; color: var(--gold); font-size: 14px; font-weight: 700;
   }
   .modal .guide-body h4:first-child { margin-top: 0; }
   .modal .guide-step { display: flex; gap: 10px; margin: 8px 0; align-items: flex-start; }
   .modal .guide-num {
     flex: none; min-width: 22px; height: 22px; padding: 0 4px; border-radius: 11px;
-    background: rgba(255,212,121,.16); color: #ffd479;
+    background: rgba(255,212,121,.16); color: var(--gold);
     display: flex; align-items: center; justify-content: center;
     font-size: 12px; font-weight: 700;
   }
@@ -346,14 +387,14 @@
     display: flex; align-items: center; gap: 12px; padding: 7px 0;
     border-bottom: 1px solid rgba(255,255,255,.05);
   }
-  .modal .hand-rank-name { width: 76px; flex: none; font-size: 13px; color: #ffd479; }
+  .modal .hand-rank-name { width: 76px; flex: none; font-size: 13px; color: var(--gold); }
   .modal .hand-rank-cards { display: flex; gap: 4px; flex: none; }
-  .modal .hand-rank-tip { font-size: 12px; color: #9fb3a8; }
+  .modal .hand-rank-tip { font-size: 12px; color: var(--text-dim); }
   .modal .term-row {
     display: flex; gap: 12px; padding: 7px 0;
     border-bottom: 1px solid rgba(255,255,255,.05);
   }
-  .modal .term-name { width: 84px; flex: none; color: #ffd479; font-size: 13px; }
+  .modal .term-name { width: 84px; flex: none; color: var(--gold); font-size: 13px; }
   .mobile-only { display: none; }
   #btnMore, #btnInfo, .info-close { display: none; }
 
@@ -409,6 +450,12 @@
     /* 中央 */
     .center { gap: 6px; }
     .pot-box { font-size: 12px; padding: 3px 12px; }
+  .pot-box.bump { animation: potBump .25s ease-out; }
+  @keyframes potBump {
+    0%   { transform: scale(1); }
+    45%  { transform: scale(1.13); }
+    100% { transform: scale(1); }
+  }
     .pot-box b { font-size: 15px; }
     .board { gap: 4px; min-height: 58px; }
     .card { width: 40px; height: 56px; border-radius: 5px; }
@@ -430,7 +477,7 @@
     }
     .info.open { transform: translateY(0); }
     .info-close {
-      padding: 10px; text-align: center; font-size: 13px; color: #9fb3a8;
+      padding: 10px; text-align: center; font-size: 13px; color: var(--text-dim);
       border-bottom: 1px solid rgba(255,255,255,.06);
     }
     .info .log { max-height: 26vh; }
@@ -514,6 +561,7 @@
     <span class="spacer"></span>
     <button class="btn-mini desktop-only" id="btnGto">GTO 表</button>
     <button class="btn-mini desktop-only" id="btnGuide">规则</button>
+    <button class="btn-mini desktop-only" id="btnSound" title="背景音乐开关">🔊 声音</button>
     <button class="btn-mini desktop-only" id="btnSettings">设置</button>
     <button class="btn-mini desktop-only" id="btnStats">统计</button>
     <button class="btn-mini desktop-only" id="btnHistory">牌谱</button>
@@ -1766,6 +1814,164 @@ window.GTO_TABLE = {
   var resultShown = false;     // 本手结果弹层是否已弹
   var raiseValue = 0;
 
+  // =====================================================================
+  //  音频：Web Audio 实时合成，零音频文件
+  //  背景音乐是 ii-V-I-vi 的爵士循环（钢琴分解 + 贝斯 + pad + 稀疏铃声）
+  //  音效全部现场合成：发牌 / 筹码 / 输赢 / 轮到你
+  // =====================================================================
+  var Sound = (function () {
+    var ctx = null, musicBus = null, sfxBus = null;
+    var S = { musicOn: true, sfxOn: true, musicVol: 0.28, sfxVol: 0.55 };
+    var musicTimer = null, musicRunning = false, step = 0;
+
+    try {
+      var raw = JSON.parse(localStorage.getItem('poker.audio.v1') || '{}');
+      if (typeof raw.musicOn === 'boolean') S.musicOn = raw.musicOn;
+      if (typeof raw.sfxOn === 'boolean') S.sfxOn = raw.sfxOn;
+      if (typeof raw.musicVol === 'number') S.musicVol = Math.max(0, Math.min(1, raw.musicVol));
+      if (typeof raw.sfxVol === 'number') S.sfxVol = Math.max(0, Math.min(1, raw.sfxVol));
+    } catch (e) {}
+
+    function persist() {
+      try { localStorage.setItem('poker.audio.v1', JSON.stringify(S)); } catch (e) {}
+    }
+
+    function ensure() {
+      if (ctx) {
+        if (ctx.state === 'suspended') ctx.resume();
+        return ctx;
+      }
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      try { ctx = new AC(); } catch (e) { return null; }
+      musicBus = ctx.createGain(); musicBus.gain.value = S.musicVol; musicBus.connect(ctx.destination);
+      sfxBus = ctx.createGain(); sfxBus.gain.value = S.sfxVol; sfxBus.connect(ctx.destination);
+      return ctx;
+    }
+
+    function midi(n) { return 440 * Math.pow(2, (n - 69) / 12); }
+
+    function tone(freq, when, dur, type, peak, bus, detune) {
+      var c = ensure(); if (!c || !bus) return;
+      var o = c.createOscillator(), g = c.createGain();
+      o.type = type || 'sine';
+      o.frequency.value = freq;
+      if (detune) o.detune.value = detune;
+      g.gain.setValueAtTime(0.0001, when);
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0002, peak), when + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
+      o.connect(g); g.connect(bus);
+      o.start(when); o.stop(when + dur + 0.05);
+    }
+
+    function noise(when, dur, peak, bus, hp) {
+      var c = ensure(); if (!c || !bus) return;
+      var len = Math.max(1, Math.floor(c.sampleRate * dur));
+      var buf = c.createBuffer(1, len, c.sampleRate);
+      var d = buf.getChannelData(0);
+      for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      var src = c.createBufferSource(); src.buffer = buf;
+      var f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = hp || 1200;
+      var g = c.createGain(); g.gain.value = peak;
+      src.connect(f); f.connect(g); g.connect(bus);
+      src.start(when);
+    }
+
+    var SFX = {
+      deal: function () {
+        var c = ensure(); if (!c || !S.sfxOn) return;
+        var t = c.currentTime;
+        noise(t, 0.08, 0.42, sfxBus, 2000);
+        tone(880, t, 0.07, 'triangle', 0.045, sfxBus);
+      },
+      chip: function (amount) {
+        var c = ensure(); if (!c || !S.sfxOn) return;
+        var t = c.currentTime;
+        var big = Math.min(1, Math.log10(Math.max(10, amount || 10)) / 3.5);
+        noise(t, 0.05, 0.20 + big * 0.28, sfxBus, 2600);
+        tone(1400 + big * 400, t, 0.05, 'square', 0.025 + big * 0.028, sfxBus);
+        tone(900, t + 0.02, 0.06, 'triangle', 0.035, sfxBus);
+      },
+      win: function () {
+        var c = ensure(); if (!c || !S.sfxOn) return;
+        var t = c.currentTime;
+        [72, 76, 79, 84].forEach(function (n, i) {
+          tone(midi(n), t + i * 0.09, 0.5, 'triangle', 0.095, sfxBus);
+        });
+      },
+      lose: function () {
+        var c = ensure(); if (!c || !S.sfxOn) return;
+        var t = c.currentTime;
+        [64, 60, 55].forEach(function (n, i) {
+          tone(midi(n), t + i * 0.10, 0.45, 'sine', 0.085, sfxBus);
+        });
+      },
+      turn: function () {
+        var c = ensure(); if (!c || !S.sfxOn) return;
+        var t = c.currentTime;
+        tone(1046, t, 0.14, 'sine', 0.065, sfxBus);
+        tone(1568, t + 0.09, 0.20, 'sine', 0.045, sfxBus);
+      }
+    };
+
+    // ii-V-I-vi：Dm9 → G13 → Cmaj9 → Am9，每小节 2.4 秒
+    var CHORDS = [
+      { root: 50, notes: [62, 65, 69, 72, 76] },
+      { root: 43, notes: [59, 62, 65, 69, 72] },
+      { root: 48, notes: [55, 59, 62, 64, 67] },
+      { root: 45, notes: [60, 64, 67, 71, 74] }
+    ];
+    var BAR = 2.4;
+
+    function playBar() {
+      var c = ensure(); if (!c) return;
+      var t = c.currentTime + 0.05;
+      var ch = CHORDS[step % CHORDS.length];
+      var arp = [0, 2, 1, 3, 4, 3, 1, 2];
+      for (var i = 0; i < 8; i++) {
+        tone(midi(ch.notes[arp[i] % ch.notes.length]), t + i * (BAR / 8), 0.55, 'triangle', 0.042, musicBus);
+      }
+      tone(midi(ch.root), t, 0.9, 'sine', 0.085, musicBus);
+      tone(midi(ch.root), t + BAR / 2, 0.9, 'sine', 0.070, musicBus);
+      tone(midi(ch.notes[0]), t, BAR + 0.4, 'sine', 0.028, musicBus, -6);
+      tone(midi(ch.notes[2]), t, BAR + 0.4, 'sine', 0.024, musicBus, 7);
+      if (Math.random() < 0.30) {
+        var hi = ch.notes[Math.floor(Math.random() * ch.notes.length)] + 24;
+        tone(midi(hi), t + Math.random() * BAR, 1.4, 'sine', 0.018, musicBus);
+      }
+      step++;
+    }
+
+    function startMusic() {
+      if (!S.musicOn || musicRunning) return;
+      if (!ensure()) return;
+      musicRunning = true; step = 0;
+      playBar();
+      musicTimer = setInterval(playBar, BAR * 1000);
+    }
+    function stopMusic() {
+      musicRunning = false;
+      if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+    }
+
+    return {
+      unlock: function () { if (S.musicOn && !musicRunning) startMusic(); },
+      play: function (name, arg) { try { if (SFX[name]) SFX[name](arg); } catch (e) {} },
+      setMusic: function (on) { S.musicOn = !!on; persist(); if (on) startMusic(); else stopMusic(); },
+      setSfx: function (on) { S.sfxOn = !!on; persist(); },
+      setMusicVol: function (v) {
+        S.musicVol = Math.max(0, Math.min(1, v)); persist();
+        if (musicBus) musicBus.gain.value = S.musicVol;
+      },
+      setSfxVol: function (v) {
+        S.sfxVol = Math.max(0, Math.min(1, v)); persist();
+        if (sfxBus) sfxBus.gain.value = S.sfxVol;
+      },
+      get: function () { return { musicOn: S.musicOn, sfxOn: S.sfxOn, musicVol: S.musicVol, sfxVol: S.sfxVol }; }
+    };
+  })();
+
+
   // ---------------- 本地存储 ----------------
   var LS = {
     get: function (k, d) {
@@ -1782,7 +1988,8 @@ window.GTO_TABLE = {
     if (!s || typeof s !== 'object') {
       return {
         chips: 2000, hands: 0, rebuys: 0, table: 'hu', aiLevel: 'normal',
-        messageEnabled: true, myAvatarKey: null, blinds: { sb: 10, bb: 20 }
+        messageEnabled: true, myAvatarKey: null, theme: 'green',
+        blinds: { sb: 10, bb: 20 }
       };
     }
     var set = s.settings || {};
@@ -1795,6 +2002,7 @@ window.GTO_TABLE = {
       messageEnabled: set.messageEnabled !== false,
       myAvatarKey: set.myAvatarKey || null,
       myEmoji: set.myEmoji || '🐋',
+      theme: set.theme || 'green',
       blinds: (set.blinds && set.blinds.sb > 0 && set.blinds.bb >= set.blinds.sb)
         ? { sb: set.blinds.sb, bb: set.blinds.bb }
         : { sb: 10, bb: 20 }
@@ -1820,6 +2028,7 @@ window.GTO_TABLE = {
     if (s.myAvatarKey !== undefined) old.settings.myAvatarKey = s.myAvatarKey;
     if (s.myEmoji) old.settings.myEmoji = s.myEmoji;
     if (s.blinds) old.settings.blinds = s.blinds;
+    if (s.theme) old.settings.theme = s.theme;
     if (!old.stats) old.stats = { vpip: 0, pfr: 0, won: 0, ev: 0 };
     LS.set('poker.save.v2', old);
   }
@@ -1834,6 +2043,9 @@ window.GTO_TABLE = {
 
   function newGame() {
     var s = loadSettings();
+    applyTheme(s.theme);
+    var tm = String(location.search || '').match(/[?&]theme=(green|blue|wood)/);
+    if (tm) applyTheme(tm[1]);
     var forced = urlTable();
     if (forced) s.table = forced;
     messages = [];
@@ -1870,6 +2082,7 @@ window.GTO_TABLE = {
     });
     buildSeats();
     E.startHand(game);
+    Sound.play('deal');
     resetMind();
     snapshotChips(game);
     render();
@@ -2172,7 +2385,15 @@ window.GTO_TABLE = {
     var board = $('board'); board.innerHTML = '';
     for (var i = 0; i < 5; i++) board.appendChild(cardEl(game.board[i], false));
 
-    $('potValue').textContent = game.pot;
+    if ($('potValue').textContent !== String(game.pot)) {
+      $('potValue').textContent = game.pot;
+      var pb = $('potValue').parentNode;
+      if (pb && pb.classList) {
+        pb.classList.remove('bump');
+        void pb.offsetWidth;   // 强制重排，让动画能重播
+        pb.classList.add('bump');
+      }
+    }
     $('streetLabel').textContent = game.handOver ? '本手结束' : (game.streetLabel || '等待开局');
 
     // 信息面板
@@ -2296,6 +2517,10 @@ window.GTO_TABLE = {
     } catch (err) {
       console.error(err);
       return;
+    }
+    if (action.type === 'call' || action.type === 'raise' || action.type === 'allin') {
+      var me = game.players[0];
+      Sound.play('chip', (action.amount || me.streetBet || 20));
     }
     render();
     if (game.handOver) onHandEnd();
@@ -3318,10 +3543,18 @@ window.GTO_TABLE = {
     showBubble(seat, text);
   }
 
+  var _turnSoundAt = -1;
+
   function scheduleAI() {
     if (game.handOver) return;
     var seat = game.activeSeat;
-    if (seat < 0 || seat === 0) return;
+    if (seat < 0 || seat === 0) {
+      if (seat === 0 && _turnSoundAt !== game.actions.length) {
+        _turnSoundAt = game.actions.length;
+        Sound.play('turn');
+      }
+      return;
+    }
     busy = true;
     render();
     setTimeout(function () {
@@ -3379,6 +3612,7 @@ window.GTO_TABLE = {
     }
     snapshotChips(game);
     syncRebuyEvents();
+    Sound.play('deal');
     render();
     scheduleAI();
   }
@@ -3659,6 +3893,10 @@ window.GTO_TABLE = {
   function showResult() {
     var me = game.players[0];
     var r = game.result;
+    var won = 0;
+    if (r && r.winners) r.winners.forEach(function (w) { if (w.playerId === 0) won += w.amount; });
+    if (won > 0) Sound.play('win');
+    else if (!me.folded) Sound.play('lose');
     var html = '<h3>本手结算</h3>';
     html += '<div class="row"><span>公共牌</span><span>' +
       (game.board.length ? game.board.map(E.cardStr).join(' ') : '（未发）') + '</span></div>';
@@ -4277,12 +4515,39 @@ window.GTO_TABLE = {
       '<input id="setSb" class="num-input" type="number" min="1" step="1" value="' + s.blinds.sb + '"></span></div>';
     html += '<div class="row"><span>大盲</span><span>' +
       '<input id="setBb" class="num-input" type="number" min="2" step="1" value="' + s.blinds.bb + '"></span></div>';
+    html += '<div class="row"><span>牌桌配色</span><span class="theme-pick">' +
+      '<button class="theme-btn" data-theme="green">绿毯</button>' +
+      '<button class="theme-btn" data-theme="blue">蓝调</button>' +
+      '<button class="theme-btn" data-theme="wood">木桌</button></span></div>';
+    var au = Sound.get();
+    html += '<div class="row"><span>背景音乐</span><span>' +
+      '<input type="checkbox" id="setMusic"' + (au.musicOn ? ' checked' : '') + '></span></div>';
+    html += '<div class="row"><span>音乐音量</span><span>' +
+      '<input type="range" id="setMusicVol" min="0" max="100" value="' + Math.round(au.musicVol * 100) + '"></span></div>';
+    html += '<div class="row"><span>音效</span><span>' +
+      '<input type="checkbox" id="setSfx"' + (au.sfxOn ? ' checked' : '') + '></span></div>';
+    html += '<div class="row"><span>音效音量</span><span>' +
+      '<input type="range" id="setSfxVol" min="0" max="100" value="' + Math.round(au.sfxVol * 100) + '"></span></div>';
     html += '<div class="note">改盲注会重开一局，本场手数与筹码保留。大盲不能小于小盲。</div>';
     html += '<div class="actions">' +
       '<button class="btn fold" id="btnCancelSet">取消</button>' +
       '<button class="btn check" id="btnSaveSet">保存并重开</button></div>';
     openModal(html);
     $('setAi').value = s.aiLevel || 'normal';
+    var curTheme = document.body.getAttribute('data-theme') || 'green';
+    Array.prototype.forEach.call(document.querySelectorAll('.theme-btn'), function (b) {
+      b.classList.toggle('on', b.getAttribute('data-theme') === curTheme);
+      b.onclick = function () {
+        applyTheme(b.getAttribute('data-theme'));
+        Array.prototype.forEach.call(document.querySelectorAll('.theme-btn'), function (x) {
+          x.classList.toggle('on', x === b);
+        });
+      };
+    });
+    $('setMusic').onchange = function () { Sound.setMusic(this.checked); };
+    $('setMusicVol').oninput = function () { Sound.setMusicVol(this.value / 100); };
+    $('setSfx').onchange = function () { Sound.setSfx(this.checked); };
+    $('setSfxVol').oninput = function () { Sound.setSfxVol(this.value / 100); };
     $('btnCancelSet').onclick = closeModal;
     $('btnSaveSet').onclick = function () {
       var sb = Math.max(1, parseInt($('setSb').value, 10) || 10);
@@ -4291,6 +4556,7 @@ window.GTO_TABLE = {
       st.blinds = { sb: sb, bb: bb };
       st.aiLevel = $('setAi').value;
       st.messageEnabled = $('setMsg').checked;
+      st.theme = document.body.getAttribute('data-theme') || 'green';
       saveSettings(st);
       if (game) {
         game.aiLevel = st.aiLevel;
@@ -4302,6 +4568,10 @@ window.GTO_TABLE = {
       closeModal();
       newGame();
     };
+  }
+
+  function applyTheme(name) {
+    document.body.setAttribute('data-theme', name || 'green');
   }
 
   function switchTable(mode) {
@@ -4357,6 +4627,17 @@ window.GTO_TABLE = {
   $('btnHistory').onclick = showHistory;
   $('btnStats').onclick = showStats;
   $('btnSettings').onclick = showSettings;
+  function syncSoundBtn() {
+    var b = $('btnSound');
+    if (!b) return;
+    b.textContent = Sound.get().musicOn ? '🔊 声音' : '🔇 静音';
+  }
+  $('btnSound').onclick = function () {
+    Sound.unlock();
+    Sound.setMusic(!Sound.get().musicOn);
+    syncSoundBtn();
+  };
+  syncSoundBtn();
   $('btnGuide').onclick = function () { showGuide(); };
   $('btnGto').onclick = function () { $('modal').classList.add('wide'); showGto(); };
 
@@ -4496,6 +4777,14 @@ window.GTO_TABLE = {
       btns[i].click();
       e.preventDefault();
     }
+  });
+
+  // 浏览器要求先有用户交互才能出声：第一次点击/按键时解锁音频
+  ['click', 'keydown', 'touchstart'].forEach(function (evt) {
+    document.addEventListener(evt, function once() {
+      Sound.unlock();
+      document.removeEventListener(evt, once);
+    }, { once: true });
   });
 
   // 调试：?settings=1 直接打开设置弹层（截图与自查用）
