@@ -2813,9 +2813,10 @@ window.GTO_TABLE = {
       html += '</div>';
     }
     html += '</div>';
-    html += '<div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">关闭</button></div>';
+    html += '<div class="modal-actions"><button class="btn btn-ghost" id="btnCloseRc">关闭</button></div>';
     openModal(html);
-    var b = $('modalClose');
+    // closeModal 在 IIFE 里，不能写 onclick="closeModal()"（全局找不到），必须 JS 绑定
+    var b = $('btnCloseRc');
     if (b) b.onclick = closeModal;
   }
 

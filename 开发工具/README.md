@@ -14,6 +14,7 @@
 | `repro-chips.js` | 筹码结算复现：短码全下 / 长码弃牌两种场景 | `node 开发工具/repro-chips.js` |
 | `audit.js` | 静态检查：死函数 / 死常量 / 无用 CSS / 调试残留 / 外链 | `node 开发工具/audit.js` |
 | `verify-settings.js` | 用 CDP 真点设置面板，验证主题与发牌风格两组按钮互不串台 | `node 开发工具/verify-settings.js` |
+| `verify-mobile-ui.js` | 手机端 UI 体检：逐个打开九种弹层/抽屉，检查横向溢出与关闭按钮（`node 开发工具/verify-mobile-ui.js`） |
 | `audit.js` | 静态检查：死函数 / 死常量 / 无用 CSS / 调试残留 / 外链 | `node 开发工具/audit.js` |
 | `dealstyle-stats.js` | 发牌风格三档的牌型分布与玩家底牌质量对比 | `node 开发工具/dealstyle-stats.js 400` |
 

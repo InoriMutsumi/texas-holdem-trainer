@@ -311,7 +311,7 @@ AI 的性格**不会显示出来**。没有标签、没有悬停提示、牌谱�
 | 文件 | 作用 |
 |---|---|
 | `index.html` | 游戏本体，样式、引擎、界面、GTO 数据全内联，零依赖 |
-| `test.js` | 引擎单元测试，`node test.js`（121 条） |
+| `test.js` | 引擎单元测试，`node test.js`（127 条） |
 | `check.js` | 语法检查 + 无浏览器冒烟，`node check.js` / `check.js six` / `check.js nine` |
 | `开发工具/gto-data.js` | GTO 翻前表源数据，30KB（已在 `index.html` 内联一份） |
 | `资料/` | 设计文档：方案、后续开发方案、难度提升报告/方案、验收清单、自检报告、GPT 验收提示词 |
@@ -326,6 +326,7 @@ AI 的性格**不会显示出来**。没有标签、没有悬停提示、牌谱�
 | `开发工具/README.md` | 上面这些脚本的用途与口径索引 |
 | `开发工具/inline-gto.js` | 把 `gto-data.js` 内联进 `index.html` |
 | `开发工具/shot-mobile.js` | CDP 真机视口截图（Edge headless 的 `--window-size` 有 492px 下限，必须走 CDP） |
+| `开发工具/verify-mobile-ui.js` | 手机端 UI 体检：逐个打开九种弹层/抽屉，检查横向溢出与关闭按钮 |
 | `开发工具/make-shots.sh` | 批量重截界面图 |
 | `开发工具/make-demo-gif.py` | 拼演示 GIF |
 | `开发工具/push-api.js` | GitHub Data API 推送（git 直连被墙时用） |
