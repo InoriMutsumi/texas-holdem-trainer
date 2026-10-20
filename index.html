@@ -223,6 +223,9 @@
   .modal .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
   .modal .actions .btn { padding: 9px 18px; font-size: 14px; }
   .modal .note { font-size: 12px; color: #7f9489; line-height: 1.7; margin-top: 10px; }
+  .modal .ai-guide { padding: 10px 12px; background: rgba(255,255,255,.03); border-left: 2px solid #3d6b52; border-radius: 4px; }
+  .modal .ai-guide b { color: #d8b862; }
+  #setAi { width: 176px; }
   .modal .hand-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
   .modal .hand-line .mini-cards { display: flex; gap: 4px; }
   .modal .empty-tip { color: #7f9489; font-size: 13px; padding: 20px 0; text-align: center; }
@@ -504,8 +507,8 @@
     <span class="stat">补码 <b id="topRebuys">0</b> 次</span>
     <label class="stat ai-level">AI <select id="aiLevelSel">
       <option value="easy">新手</option>
-      <option value="normal">普通</option>
-      <option value="hard">老手</option>
+      <option value="normal">熟练</option>
+      <option value="hard">职业</option>
     </select></label>
     <label class="stat msg-toggle"><input type="checkbox" id="msgToggle" checked> 消息</label>
     <span class="spacer"></span>
@@ -541,6 +544,7 @@
         <div class="info-row"><span>要跟注</span><b id="infoToCall">0</b></div>
         <div class="info-row"><span>所需胜率</span><b id="infoOdds">—</b></div>
         <div class="info-row"><span>牌力估计</span><b id="infoStrength">—</b></div>
+        <div class="info-row"><span>AI 读你</span><b id="infoRead">—</b></div>
       </div>
       <div class="info-section">
         <h4>起手牌参考</h4>
@@ -2174,6 +2178,14 @@ window.GTO_TABLE = {
     var need = (!game.handOver && toCall > 0) ? Math.round(toCall / (game.pot + toCall) * 100) : 0;
     $('infoOdds').textContent = need > 0 ? need + '%' : '—';
     $('infoStrength').textContent = me.hole.length ? Math.round(preflopScore(me.hole) * 100) + '%' : '—';
+    // 伪作弊：把「AI 在读你」这件事变成看得见的数字，否则你根本感觉不到它在算计你
+    var ex0 = exploitOf(0);
+    var readTxt = '样本不足';
+    if (ex0) {
+      var tagCn = { foldy: '爱弃牌', station: '爱跟注', bluffy: '爱诈唬', nuts: '不诈唬' }[ex0.note] || '正常';
+      readTxt = '弃 ' + Math.round(ex0.foldRate * 100) + '% · ' + tagCn;
+    }
+    $('infoRead').textContent = readTxt;
     $('handTip').textContent = (!game.handOver && game.street === 'preflop')
       ? (handAdvice() || '—')
       : '翻牌后看公共牌与底池赔率，不再套起手牌表。';
@@ -2363,8 +2375,8 @@ window.GTO_TABLE = {
     // 熟练＝全精度、零手滑、会读人、会打薄价值，但翻后按「对手随机两张牌」算胜率，
     // 且保留一点「人味」失误率——会算不等于不会失手
     normal: { name: '熟练', mistake: 0.03, iters: 1200, blur: 0.00, noGto: false, noOdds: false, noRead: false, noRange: true,  noMdf: true,  fixedSize: true,  scare: 0.00, pro: true },
-    // 职业＝零失误 + 更多抽样。范围追踪做过一版，实测对弱玩家是负收益（见「难度提升报告.md」），已关闭
-    hard:   { name: '职业', mistake: 0.00, iters: 1800, blur: 0.00, noGto: false, noOdds: false, noRead: false, noRange: true,  rangeMix: 1.00, noMdf: true, fixedSize: true, scare: 0.00, pro: true }
+    // 职业＝零失误 + 全精度 + 全部高级组件（范围追踪 / MDF / 随机尺度 / 慢打 / 二次开火 / 剥削 / 伪作弊）
+    hard:   { name: '职业', mistake: 0.00, iters: 1800, blur: 0.00, noGto: false, noOdds: false, noRead: false, noRange: false, rangeMix: 1.00, noMdf: false, fixedSize: false, scare: 0.00, pro: true, elite: true, pseudoCheat: true }
   };
 
   // enterMul  进入底池的倾向（>1 更爱玩）
@@ -2413,7 +2425,11 @@ window.GTO_TABLE = {
       AI_MIND[seat] = {
         hands: 0, vpipHands: 0, pfrHands: 0, aggActs: 0, postActs: 0, tilt: 0,
         // 行为画像：面对下注的弃牌倾向（用来决定「该多诈唬还是该多收价值」）
-        facedBet: 0, foldedToBet: 0, riverFaced: 0, riverFolded: 0
+        facedBet: 0, foldedToBet: 0, riverFaced: 0, riverFolded: 0,
+        // 伪作弊：分街漏洞 + 摊牌牌力（0=高牌 1=一对 … 8=同花顺）
+        sFaced: { flop: 0, turn: 0, river: 0 },
+        sFolded: { flop: 0, turn: 0, river: 0 },
+        showCats: [], raisedShowCats: []
       };
     }
     return AI_MIND[seat];
@@ -2444,6 +2460,11 @@ window.GTO_TABLE = {
         if (a.street === 'river') {
           ma.riverFaced++;
           if (a.type === 'fold') ma.riverFolded++;
+        }
+        // 分街漏洞：跟注站翻牌不弃、河牌却秒弃，是完全不同的两种对手
+        if (a.street !== 'preflop' && ma.sFaced[a.street] !== undefined) {
+          ma.sFaced[a.street]++;
+          if (a.type === 'fold') ma.sFolded[a.street]++;
         }
       }
       if (a.playerId === 0) continue;
@@ -2476,6 +2497,29 @@ window.GTO_TABLE = {
       }
       md.tilt *= 0.92;
     }
+
+    // 伪作弊：摊牌时看清你加注的成色。
+    // 你加注后老是摊出高牌 / 一对 → 以后你再加注他就少信；
+    // 你从不拿弱牌加注 → 那他一见你加注就跑。这是真人高手最值钱的一项观察。
+    var hero = g.players[0];
+    if (g.result && g.result.showdown && hero && !hero.folded && hero.hole && g.board && g.board.length >= 5) {
+      try {
+        var ev = E.eval7(hero.hole.concat(g.board));
+        if (ev) {
+          var hm = mindOf(0);
+          hm.showCats.push(ev[0]);
+          if (hm.showCats.length > 40) hm.showCats.shift();
+          var raisedThisHand = false;
+          for (var q = 0; q < acts.length; q++) {
+            if (acts[q].playerId === 0 && (acts[q].type === 'raise' || acts[q].type === 'allin')) { raisedThisHand = true; break; }
+          }
+          if (raisedThisHand) {
+            hm.raisedShowCats.push(ev[0]);
+            if (hm.raisedShowCats.length > 20) hm.raisedShowCats.shift();
+          }
+        }
+      } catch (e) { /* 牌不够或结算异常，跳过 */ }
+    }
   }
 
   // 读桌：看其他座位是松鱼多还是紧手多。样本不足 6 手不下结论，免得开局乱猜。
@@ -2494,18 +2538,44 @@ window.GTO_TABLE = {
     return { n: n, avgVpip: n ? sum / n : 0.35, loose: loose, tight: tight };
   }
 
-  // 剥削：真人面对下注老爱弃牌 → 多诈唬；从不弃牌 → 多收价值。
+  // 剥削（伪作弊的核心）：不是偷看你的底牌，是把你的习惯记得比你自己还清楚。
   // 样本不足 6 次观测就不下结论，免得前几手就「读死」。
   function exploitOf(seat) {
     var m = AI_MIND[seat];
     if (!m || m.facedBet < 6) return null;
     var f = m.foldedToBet / m.facedBet;
     var rf = m.riverFaced >= 4 ? m.riverFolded / m.riverFaced : f;
-    var out = { bluff: 1, value: 1, foldRate: f, n: m.facedBet };
-    if (f > 0.55) out.bluff *= 1.70;
-    else if (f > 0.45) out.bluff *= 1.25;
-    if (f < 0.30) { out.bluff *= 0.45; out.value *= 1.22; }
-    if (rf > 0.62) out.bluff *= 1.30;
+    var out = { bluff: 1, value: 1, foldRate: f, riverFold: rf, n: m.facedBet, note: '', cheatLine: '', cheatStreet: null };
+
+    // ① 总弃牌率：你爱弃牌就多诈唬，你不弃就少诈唬多收价值
+    if (f > 0.55) { out.bluff *= 1.70; out.note = 'foldy'; }
+    else if (f > 0.45) { out.bluff *= 1.25; out.note = 'foldy'; }
+    if (f < 0.30) { out.bluff *= 0.45; out.value *= 1.22; out.note = 'station'; }
+
+    // ② 河牌单点：河牌弃得比别处多，说明你只敢跟到转牌 → 河牌多开火
+    if (rf > 0.62) { out.bluff *= 1.30; out.cheatLine = 'riverFold'; }
+
+    // ③ 摊牌成色：你加注后摊出来的是什么牌，比你怎么打更说明问题
+    var rs = m.raisedShowCats || [];
+    if (rs.length >= 3) {
+      var weak = 0, i;
+      for (i = 0; i < rs.length; i++) if (rs[i] <= 1) weak++;
+      var wr = weak / rs.length;
+      if (wr > 0.55) { out.bluff *= 0.70; out.value *= 1.10; out.note = 'bluffy'; out.cheatLine = 'bluffy'; }
+      else if (wr < 0.12) { out.bluff *= 1.20; out.note = 'nuts'; out.cheatLine = 'nuts'; }
+    }
+
+    // ④ 分街短板：哪条街你最不敢跟，就在那条街多开火
+    var worst = null, worstGap = 0;
+    ['flop', 'turn', 'river'].forEach(function (st) {
+      var faced = (m.sFaced && m.sFaced[st]) || 0;
+      if (faced < 4) return;
+      var fr = m.sFolded[st] / faced;
+      var gap = fr - f;
+      if (gap > worstGap) { worstGap = gap; worst = st; }
+    });
+    if (worst && worstGap > 0.12) { out.bluff *= 1.15; out.cheatStreet = worst; }
+
     return out;
   }
 
@@ -2944,7 +3014,9 @@ window.GTO_TABLE = {
       return { type: 'raise', amount: v };
     }
     function betSize(frac) {
-      return g.streetCurrentBet + (g.pot + toCall) * frac * style.sizeMul;
+      // 伪作弊读到你爱跟注（value>1）→ 价值尺度往上顶，一寸都不放过
+      var vb = exploit ? exploit.value : 1;
+      return g.streetCurrentBet + (g.pot + toCall) * frac * style.sizeMul * vb;
     }
 
     // ---- 难度：手滑。软档会以一定概率不按牌理出牌 ----
@@ -3002,7 +3074,9 @@ window.GTO_TABLE = {
         if (toCall <= 0) return { type: 'check' };
         return { type: 'fold' };
       }
-      // 表未覆盖（大盲无人加注、冷跟等）：牌力兜底
+      // 表未覆盖（大盲无人加注、冷跟等）：牌力兜底。
+      // 这里原来放得很松（sc>0.44 就跟、小注 55% 随机跟），实测把 VPIP 顶到 40%，
+      // 而 GTO 的 6-max 全位置平均只有 25% 左右——松出来的全是 limp。
       var sc = preflopScore(p.hole);
       _lastEq = Math.min(1, sc * 1.25);
       if (toCall <= 0) {
@@ -3012,7 +3086,7 @@ window.GTO_TABLE = {
         return { type: 'check' };
       }
       if (canRaise && sc > 0.74) return raiseTo(preflopRaiseAmount(g, style));
-      if (sc > 0.44 || (toCall <= g.bigBlind && Math.random() < 0.55 * style.enterMul)) return { type: 'call' };
+      if (sc > 0.50 || (toCall <= g.bigBlind && Math.random() < 0.28 * style.enterMul)) return { type: 'call' };
       return { type: 'fold' };
     }
 
@@ -3061,6 +3135,12 @@ window.GTO_TABLE = {
     if (read.tight > 0) minEq += 0.035 * Math.min(3, read.tight);      // 对面有紧手在加注，收着点
     if (read.loose > 0) minEq -= 0.02 * Math.min(3, read.loose);       // 对面全是跟注站，能便宜看牌就看
     if (myMind.tilt > 0.08) minEq *= (1 - myMind.tilt * 0.25);         // 上头了，弃不掉牌
+    // 伪作弊：你加注后老摊出高牌/一对 → 你这是在诈唬 → 我多跟；
+    // 你从不拿弱牌加注 → 你一加注就是真有牌 → 我少跟、见到就跑
+    if (exploit && toCall > 0) {
+      if (exploit.note === 'bluffy') minEq -= 0.055;
+      else if (exploit.note === 'nuts') minEq += 0.06;
+    }
 
     // MDF（最小防守频率）：面对小注不能过度弃牌，否则会被无限诈唬。
     // 半池下注要求整体防守约 67%，这里用「降低弃牌门槛」近似。
@@ -3140,6 +3220,28 @@ window.GTO_TABLE = {
     return { type: 'check' };
   }
 
+  // 伪作弊的嘴炮：只在真的读到你的时候说一句，低频，免得像复读机。
+  // 它不改变任何决策，只是把「我在读你」这件事说出来——这才是伪作弊的氛围感。
+  var CHEAT_TALK = {
+    foldy:   ['你这条街弃得有点多', '又弃？我记着呢', '我猜你没牌'],
+    station: ['你什么牌都跟啊', '这手你肯定跟'],
+    bluffy:  ['你这加注我见过几次了', '又来这套？'],
+    nuts:    ['你这手是真的', '行，我尊重']
+  };
+  var _lastCheatTalk = '';
+  function pushCheatTalk(seat) {
+    if (!game || game.handOver) return;
+    var ex = exploitOf(0);
+    if (!ex || !ex.note) return;
+    if (Math.random() > 0.12) return;
+    var pool = CHEAT_TALK[ex.note];
+    if (!pool) return;
+    var text = pool[(Math.random() * pool.length) | 0];
+    if (text === _lastCheatTalk) return;
+    _lastCheatTalk = text;
+    showBubble(seat, text);
+  }
+
   function scheduleAI() {
     if (game.handOver) return;
     var seat = game.activeSeat;
@@ -3152,6 +3254,11 @@ window.GTO_TABLE = {
       try { action = aiDecide(game, seat); } catch (e) { action = { type: 'fold' }; }
       try { E.act(game, seat, action); } catch (e) { console.error(e); }
       pushMessage(seat, action);
+      // 职业档：行动完偶尔把「我在读你」说出来
+      var lvl0 = _seatLevel[seat] || game.aiLevel;
+      if (AI_PROFILE[lvl0] && AI_PROFILE[lvl0].pseudoCheat) {
+        setTimeout(function () { pushCheatTalk(seat); }, 1500);
+      }
       busy = false;
       render();
       if (game.handOver) onHandEnd();
@@ -4080,8 +4187,14 @@ window.GTO_TABLE = {
     var s = loadSettings();
     var html = '<h3>设置</h3>';
     html += '<div class="row"><span>AI 难度</span><span><select id="setAi" class="num-input">' +
-      '<option value="easy">新手</option><option value="normal">普通</option>' +
-      '<option value="hard">老手</option></select></span></div>';
+      '<option value="easy">新手 · 刚接触德州</option>' +
+      '<option value="normal">熟练 · 会打但想赢</option>' +
+      '<option value="hard">职业 · 练 GTO</option></select></span></div>';
+    html += '<div class="note ai-guide">' +
+      '<b>新手</b>——推荐刚接触德州的玩家。会漏牌、会手滑，故意留破绽给你，先在这里把规则、牌型和行动顺序打熟。<br>' +
+      '<b>熟练</b>——推荐已经会打、但还想赢的玩家。算得准、几乎不犯错，按位置开池、按赔率弃牌，用它检验自己是不是真的进步了。<br>' +
+      '<b>职业</b>——推荐练习 GTO 的玩家。会记你的每一个习惯：爱弃牌就多诈唬、爱跟注就多收价值；右侧「AI 读你」就是它给你记的笔记。' +
+      '</div>';
     html += '<div class="row"><span>AI 行动消息</span><span>' +
       '<input type="checkbox" id="setMsg"' + (s.messageEnabled !== false ? ' checked' : '') + '></span></div>';
     html += '<div class="row"><span>小盲</span><span>' +
@@ -4308,6 +4421,9 @@ window.GTO_TABLE = {
       e.preventDefault();
     }
   });
+
+  // 调试：?settings=1 直接打开设置弹层（截图与自查用）
+  if (/[?&]settings=1/.test(location.search)) setTimeout(showSettings, 300);
 })();
 </script>
 </body>
