@@ -785,6 +785,10 @@
         <div class="info-row"><span>所需胜率</span><b id="infoOdds">—</b></div>
         <div class="info-row"><span>牌力估计</span><b id="infoStrength">—</b></div>
         <div class="info-row"><span>AI 读你</span><b id="infoRead">—</b></div>
+        <div id="planDebug" style="display:none">
+          <div class="info-row" style="color:var(--text-soft);margin-top:6px">本手计划（调试）</div>
+          <div id="planDebugBody"></div>
+        </div>
       </div>
       <div class="info-section">
         <h4>起手牌参考</h4>
@@ -2713,6 +2717,25 @@ window.GTO_TABLE = {
       readTxt = '弃 ' + Math.round(ex0.foldRate * 100) + '% · ' + tagCn;
     }
     $('infoRead').textContent = readTxt;
+
+    // ?debug=plan：显示每个 AI 这手在演什么，方便验证「故事线」是否前后一致
+    var pd = $('planDebug');
+    if (pd) {
+      if (/[?&]debug=plan/.test(location.search) && game) {
+        pd.style.display = '';
+        var pdb = $('planDebugBody');
+        var rows = '';
+        for (var pi = 1; pi < game.players.length; pi++) {
+          var pl = AI_PLAN[pi];
+          if (!pl || pl.handId !== game.handId) continue;
+          rows += '<div class="info-row"><span>' + game.players[pi].name +
+            '</span><b>' + pl.intent + (pl.raisedPre ? ' · 已开池' : '') + '</b></div>';
+        }
+        pdb.innerHTML = rows || '<div class="info-row"><span>—</span></div>';
+      } else {
+        pd.style.display = 'none';
+      }
+    }
     $('handTip').textContent = (!game.handOver && game.street === 'preflop')
       ? (handAdvice() || '—')
       : '翻牌后看公共牌与底池赔率，不再套起手牌表。';
@@ -3012,13 +3035,54 @@ window.GTO_TABLE = {
   //   风格 = 往哪个方向偏（6 个数字描述一种性格，改数字就能加新风格）
   var AI_PROFILE = {
     // 新手：不查 GTO 表、不看底池赔率、不认人、不估范围、见大注就怂；乱打率高、算得糙、尺度永远是老一套
-    easy:   { name: '新手', mistake: 0.19, iters: 280,  blur: 0.52, noGto: true,  noOdds: true,  noRead: true,  noRange: true,  noMdf: true,  fixedSize: true,  scare: 0.42 },
+    easy:   { name: '新手', mistake: 0.19, iters: 280,  blur: 0.52, noGto: true,  noOdds: true,  noRead: true,  noRange: true,  noMdf: true,  fixedSize: true,  scare: 0.42, plan: false },
     // 熟练＝全精度、零手滑、会读人、会打薄价值，但翻后按「对手随机两张牌」算胜率，
     // 且保留一点「人味」失误率——会算不等于不会失手
-    normal: { name: '熟练', mistake: 0.03, iters: 1200, blur: 0.00, noGto: false, noOdds: false, noRead: false, noRange: true,  noMdf: true,  fixedSize: true,  scare: 0.00, pro: true },
+    normal: { name: '熟练', mistake: 0.03, iters: 1200, blur: 0.00, noGto: false, noOdds: false, noRead: false, noRange: true,  noMdf: true,  fixedSize: true,  scare: 0.00, pro: true, plan: true },
     // 职业＝零失误 + 全精度 + 全部高级组件（范围追踪 / MDF / 随机尺度 / 慢打 / 二次开火 / 剥削 / 伪作弊）
-    hard:   { name: '职业', mistake: 0.00, iters: 1800, blur: 0.00, noGto: false, noOdds: false, noRead: false, noRange: false, rangeMix: 1.00, noMdf: false, fixedSize: false, scare: 0.00, pro: true, elite: true, pseudoCheat: true }
+    hard:   { name: '职业', mistake: 0.00, iters: 1800, blur: 0.00, noGto: false, noOdds: false, noRead: false, noRange: false, rangeMix: 1.00, noMdf: false, fixedSize: false, scare: 0.00, pro: true, elite: true, pseudoCheat: true, plan: true }
   };
+
+  // ---------------- 单手计划 ----------------
+  // 每手只掷一次意图，整手按意图走。目的不是变强，是让行为「有故事」：
+  // 诈唬就一路诈到底（河牌没成就跑），慢打就憋到河牌突然发难。
+  // 新手档不开——新手要「看起来傻」，有计划反而露馅。
+  var AI_PLAN = {};
+
+  function planPos(g, seat) {
+    var n = g.players.length;
+    if (g.mode === 'hu') return seat === g.buttonSeat ? 'BTN' : 'BB';
+    var off = (seat - g.buttonSeat + n) % n;
+    var names = n >= 8
+      ? ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'MP+1', 'HJ', 'CO']
+      : ['BTN', 'SB', 'BB', 'UTG', 'MP', 'CO'];
+    return names[off] || 'MP';
+  }
+
+  function rollPlan(g, seat) {
+    var p = g.players[seat];
+    var n = preflopScore(p.hole || []);
+    var pos = planPos(g, seat);
+    var late = (pos === 'BTN' || pos === 'CO');
+    var r = Math.random();
+    var intent;
+    if (n >= 0.82 && r < 0.35) intent = 'trap';
+    else if (n >= 0.58) intent = 'value';
+    else if (late && n >= 0.28 && r < 0.30) intent = 'bluff';
+    else if (!late && n < 0.34) intent = 'giveup';
+    else intent = 'value';
+    AI_PLAN[seat] = { intent: intent, handId: g.handId, raisedPre: false, street: 'preflop' };
+    return AI_PLAN[seat];
+  }
+
+  function planOf(g, seat) {
+    if (typeof window !== 'undefined' && window.__NO_PLAN) return null;
+    var pl = AI_PLAN[seat];
+    if (!pl || pl.handId !== g.handId) pl = rollPlan(g, seat);
+    return pl;
+  }
+
+  function resetPlans() { AI_PLAN = {}; }
 
   // enterMul  进入底池的倾向（>1 更爱玩）
   // raiseMul  同样进池时，选择加注而非跟注的倾向
@@ -3684,6 +3748,7 @@ window.GTO_TABLE = {
   function aiDecide(g, seat) {
     var p = g.players[seat];
     var cfg = AI_PROFILE[(_seatLevel[seat] || g.aiLevel)] || AI_PROFILE.normal;
+    var plan = (cfg.plan === false) ? null : planOf(g, seat);
     var style = styleOf(seat);
     var acts = E.legalActionsFor(g, seat);
     var toCall = g.streetCurrentBet - p.streetBet;
@@ -3704,7 +3769,9 @@ window.GTO_TABLE = {
     function betSize(frac) {
       // 伪作弊读到你爱跟注（value>1）→ 价值尺度往上顶，一寸都不放过
       var vb = exploit ? exploit.value : 1;
-      return g.streetCurrentBet + (g.pot + toCall) * frac * style.sizeMul * vb;
+      // 价值意图下注更重一点，让「这手他很凶」读得出来
+      var pm = (plan && plan.intent === 'value') ? 1.10 : 1;
+      return g.streetCurrentBet + (g.pot + toCall) * frac * style.sizeMul * vb * pm;
     }
 
     // ---- 难度：手滑。软档会以一定概率不按牌理出牌 ----
@@ -3721,6 +3788,15 @@ window.GTO_TABLE = {
 
     // ===== 翻前：查 GTO 表 → 风格修正 → 难度模糊 → 掷骰 =====
     if (g.street === 'preflop') {
+      // 单手计划：翻前就定调，后面几街都按这个调子走
+      if (plan) {
+        if (plan.intent === 'bluff' && toCall <= 0 && canRaise) {
+          plan.raisedPre = true;
+          return raiseTo(preflopRaiseAmount(g, style));
+        }
+        if (plan.intent === 'giveup' && toCall > 0) return { type: 'fold' };
+        if (plan.intent === 'trap' && toCall > 0) return { type: 'call' };
+      }
       // 面对 4bet 以上（含全下战）：内置表只解到 3bet，这里必须用极窄范围兜底。
       // 否则会拿「防守 3bet 的宽范围」去跟人家的全下，比真人松好几倍。
       var pfR = preflopRaises(g);
@@ -3849,6 +3925,35 @@ window.GTO_TABLE = {
     // 一对则相反，被压制时跟注要更小心
     if (hclass === 'draw') minEq -= 0.035;
     else if (hclass === 'medium') minEq += 0.01;
+
+    // 单手计划：整手一个调子，不每街重掷骰子
+    if (plan) {
+      if (plan.intent === 'value') {
+        minEq -= 0.03;
+      } else if (plan.intent === 'bluff') {
+        // 诈唬要连成一条线：翻牌开火 → 转牌续火 → 河牌没成牌就撤
+        if (g.street === 'flop' && toCall <= 0 && canRaise && Math.random() < 0.60) {
+          return raiseTo(betSize(0.55));
+        }
+        if (g.street === 'turn' && plan.raisedPre && toCall <= 0 && canRaise && Math.random() < 0.40) {
+          return raiseTo(betSize(0.65));
+        }
+        if (g.street === 'river' && hclass !== 'value') {
+          return toCall > 0 ? { type: 'fold' } : { type: 'check' };
+        }
+      } else if (plan.intent === 'draw') {
+        if (hclass === 'draw') minEq -= 0.04;
+        if (hclass === 'value') plan.intent = 'value';
+      } else if (plan.intent === 'trap') {
+        // 慢打：一直憋着，河牌突然发难
+        if (g.street === 'river' && toCall <= 0 && canRaise && Math.random() < 0.40) {
+          return raiseTo(betSize(0.35));
+        }
+        minEq += 0.02;
+      } else if (plan.intent === 'giveup') {
+        minEq += 0.05;
+      }
+    }
 
     // 抓诈唬：只对真人开放。真人会诈唬、会过度跟注，所以跟注线该降一点；
     // AI 互打时保持紧——bench 数据证明「尊重对方的下注」赢得多（WTSD 低是代价，

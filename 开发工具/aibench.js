@@ -24,6 +24,7 @@ const posSrc = uiSrc.slice(plStart, plEnd);
 
 const sandbox = { console, Math, JSON, Date, game: null };
 sandbox.window = sandbox;
+sandbox.window.__NO_PLAN = !!process.env.NO_PLAN;
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
 vm.runInContext(engineSrc, sandbox);
