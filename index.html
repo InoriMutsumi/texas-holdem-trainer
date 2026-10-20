@@ -2325,6 +2325,18 @@ window.GTO_TABLE = {
         u.rate = V.rate;
         u.pitch = pitch || 1;
         u.volume = 0.9;
+        // synthesis-failed 多半是本机 SAPI 引擎的问题；先退回「不指定语言」再试一次，
+        // 还不行就安静放弃，别每句话都在控制台里刷错误。
+        u.onerror = function (ev) {
+          if (ev && ev.error === 'synthesis-failed' && !u.__retried) {
+            u.__retried = true;
+            var u2 = new SpeechSynthesisUtterance(u.text);
+            u2.rate = u.rate;
+            u2.pitch = u.pitch;
+            u2.volume = u.volume;
+            try { window.speechSynthesis.speak(u2); } catch (e2) {}
+          }
+        };
         window.speechSynthesis.speak(u);
       } catch (e) {}
     }
@@ -2340,7 +2352,10 @@ window.GTO_TABLE = {
         var vs = [];
         try { vs = window.speechSynthesis.getVoices() || []; } catch (e) {}
         var zh = zhVoice();
-        var head = '音色 ' + vs.length + ' 个，' + (zh ? '中文用「' + zh.name + '」' : '没找到中文音色');
+        var zhAll = vs.filter(function (v) { return /^zh/i.test(v.lang || ''); });
+        var zhNames = zhAll.slice(0, 4).map(function (v) { return v.name; }).join(' / ');
+        var head = '音色 ' + vs.length + ' 个，中文 ' + zhAll.length + ' 个'
+          + (zhNames ? '（' + zhNames + '）' : '（没找到）');
         // 把真实结果挂到 window 上，方便用户按 F12 看，也让下面能同步显示
         window.__voiceDiag = { voices: vs.length, zh: zh ? zh.name : null, ready: V.ready, state: window.speechSynthesis.speaking };
         try {
