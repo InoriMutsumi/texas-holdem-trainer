@@ -604,25 +604,91 @@
   body.shake { animation: shake .38s ease-in-out; }
 
   /* 手机横屏：只求能玩，不求精致 */
-  @media (max-width: 899px) and (orientation: landscape) and (max-height: 500px) {
-    .table-wrap { padding: 2px; }
-    .seat { width: 74px; }
-    .seat.me { width: 112px; }
-    .avatar { width: 26px; height: 26px; font-size: 13px; }
-    .seat.me .avatar { width: 30px; height: 30px; font-size: 15px; }
+  /* ---------------- 手机横屏专用布局（844×390 基准） ---------------- */
+  @media (max-width: 980px) and (orientation: landscape) and (max-height: 520px) {
+    .app { padding: 0; }
+    .topbar { height: 36px; padding: 0 8px; gap: 8px; min-height: 0; }
+    .topbar .brand { font-size: 13px; }
+    .table-wrap { padding: 2px 6px; }
+
+    /* 牌桌：横向铺满，椭圆压扁 */
+    .table { border-radius: 120px; }
+    .center { transform: translateY(-14%); gap: 3px; }
+    .street-label { display: block; font-size: 10px; margin-top: 1px; }
+
+    /* 座位：更小、更贴边 */
+    .seat { width: 70px; }
+    .seat.me { width: 100px; }
+    .avatar { width: 24px; height: 24px; font-size: 12px; }
+    .seat.me .avatar { width: 28px; height: 28px; font-size: 14px; }
     .seat .who { font-size: 9px; }
     .seat .chips { font-size: 10px; }
-    .card { width: 34px; height: 48px; }
-    .card .rk { font-size: 14px; }
-    .card .su { font-size: 12px; }
-    .board { min-height: 48px; }
+    .seat .bubble { font-size: 9px; padding: 2px 6px; max-width: 92px; }
+    .bet-pill { font-size: 9px; padding: 1px 6px; }
+    .dealer-btn { width: 13px; height: 13px; font-size: 7px; }
+
+    /* 牌 */
+    .card { width: 32px; height: 45px; }
+    .card .rk { font-size: 13px; }
+    .card .su { font-size: 11px; }
+    .board { min-height: 45px; gap: 4px; }
     .pot-box { padding: 2px 10px; font-size: 11px; }
     .pot-box b { font-size: 13px; }
-    .street-label { display: none; }
-    .center { gap: 4px; }
-    .actionbar { padding: 4px 8px calc(4px + env(safe-area-inset-bottom)); }
-    .btn { min-height: 40px; padding: 8px 4px; font-size: 12px; }
-    .raise-panel input[type=range] { width: 50%; }
+
+    /* 别人的下注筹码贴右侧，避免和底池撞 */
+    .seat:not(.me) .bet-pill {
+      left: calc(100% - 2px); top: 50%; transform: translateY(-50%);
+    }
+    .dealer-btn { left: 0; right: auto; }
+
+    /* 玩家手牌：贴座位右侧，别挡牌桌中心 */
+    .seat.me .hole-row {
+      position: absolute; left: calc(100% + 2px); top: 50%;
+      transform: translateY(-50%); margin: 0;
+    }
+
+    /* 底栏压缩 */
+    .actionbar {
+      padding: 3px 8px calc(3px + env(safe-area-inset-bottom));
+      gap: 6px; min-height: 0;
+    }
+    .actionbar .btn { min-height: 36px; padding: 6px 4px; font-size: 12px; }
+    .raise-panel { gap: 6px; }
+    .raise-panel input[type=range] { width: 46%; }
+    .info-btn { min-height: 36px; font-size: 12px; padding: 0 10px; }
+
+    /* 信息栏 → 右侧抽屉 */
+    .info {
+      position: fixed; right: 0; top: 36px; bottom: 76px; left: auto;
+      width: 216px; max-height: none; z-index: 55;
+      border-left: 1px solid rgba(255,255,255,.14); border-top: 0;
+      border-radius: 0; background: #0e1813;
+      transform: translateX(102%); transition: transform .25s ease;
+      box-shadow: -10px 0 32px rgba(0,0,0,.6);
+      overflow-y: auto;
+    }
+    .info.open { transform: translateX(0); }
+    .info-close {
+      position: sticky; top: 0; z-index: 2; background: #0e1813;
+      padding: 8px; text-align: center; font-size: 12px; color: var(--text-dim);
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .info .log { max-height: none; }
+
+    /* 引导条：横屏压成一行 */
+    .guide-tip, .guide-bar {
+      left: 10px !important; right: 10px !important; bottom: 74px !important;
+      transform: none !important; flex-wrap: nowrap !important;
+      padding: 6px 10px !important; font-size: 11px !important; gap: 8px !important;
+      max-width: none !important;
+    }
+    .guide-bar #guideText, .guide-tip span {
+      flex: 1 1 auto !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .guide-tip .btn, .guide-bar .btn { padding: 5px 10px !important; font-size: 11px !important; }
+
+    /* 弹层留出边距 */
+    .modal { max-height: 90vh; }
   }
 </style>
 </head>
@@ -5339,7 +5405,7 @@ window.GTO_TABLE = {
     guideIdx++; renderGuide();
   };
   $('guideSkip').onclick = endGuide;
-  setTimeout(maybeShowGuideTip, 600);
+  if (!/[?&]noguide=1/.test(location.search)) setTimeout(maybeShowGuideTip, 600);
   if (/[?&]tutorial=1/.test(location.search)) setTimeout(startGuide, 800);
 
   // 调试：?settings=1 直接打开设置弹层（截图与自查用）
