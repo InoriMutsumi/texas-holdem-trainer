@@ -2693,6 +2693,110 @@ window.GTO_TABLE = {
       templateKey: key
     });
     showBubble(seat, text);
+    maybeReply(seat, action);
+  }
+
+  // ---------------- AI 之间聊天 ----------------
+  // 四条铁律：只聊公开信息、每手最多两句、句长 2-6 字、要有来有回。
+  var REPLY = {
+    raise: ['又加？', '你真有牌？', '跟不跟呢', '这尺寸有意思', '加这么狠', '有点东西'],
+    allin: ['别唬我', '全下？', '这手我接', '来真的？', '想清楚了'],
+    fold: ['就知道你会弃', '又跑了', '没意思', '按得挺快']
+  };
+
+  var BANTER = [
+    ['你手气不错啊', '还行还行'],
+    ['这桌太难打了', '你刚赢了一把'],
+    ['我牌都烂透了', '我也是'],
+    ['别急，等他犯错', '你倒是不急'],
+    ['今天到这吧', '还早呢'],
+    ['再来一把', '来就来']
+  ];
+
+  var SHOWDOWN_LINES = [
+    '运气不错', '下次我不会跟了', '这池子归你了',
+    '你今晚吃定我了？', '又输给你', '换个人赢吧'
+  ];
+
+  var _talkBudget = 2;
+  var _lastTalkHand = 0;
+
+  function aiTalkingEnabled() {
+    return !!(game && game.settings && game.settings.messageEnabled !== false) ||
+      !!(game && !game.settings);
+  }
+
+  function pickOne(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  // 说一句：占预算、延迟播放、写进本手 messages（牌谱可回看）
+  function say(seat, text, delay) {
+    if (!aiTalkingEnabled() || !seat || seat === 0) return;
+    if (_talkBudget <= 0) return;
+    _talkBudget -= 1;
+    if (game) _lastTalkHand = game.handsPlayed || 0;
+    var d = delay || 0;
+    setTimeout(function () {
+      if (!game) return;
+      messages.push({
+        id: 'msg-' + (messages.length + 1) + '-t',
+        speakerId: seat,
+        actionIndex: game.actions.length - 1,
+        type: 'action',
+        text: text,
+        createdAt: Date.now(),
+        templateKey: 'talk'
+      });
+      showBubble(seat, text);
+    }, d);
+  }
+
+  // 有人大加注 / 全下时，另一个未弃牌的 AI 有 30% 接一句
+  function maybeReply(actorSeat, action) {
+    if (!aiTalkingEnabled() || !action) return;
+    var key = null;
+    if (action.type === 'allin') key = 'allin';
+    else if (action.type === 'raise' && (action.amount || 0) >= (game.pot || 1) * 0.5) key = 'raise';
+    else if (action.type === 'fold' && Math.random() < 0.18) key = 'fold';
+    if (!key) return;
+    if (Math.random() > 0.30) return;
+    var others = game.players.filter(function (p) {
+      return p.id !== 0 && p.id !== actorSeat && !p.folded;
+    });
+    if (!others.length) return;
+    say(pickOne(others).id, pickOne(REPLY[key]), 1200);
+  }
+
+  // 连续 3 手没人说话，25% 概率两个 AI 一来一回
+  function maybeBanter() {
+    if (!aiTalkingEnabled()) return;
+    if ((game.handsPlayed || 0) - _lastTalkHand < 3) return;
+    if (Math.random() > 0.25) return;
+    var ais = game.players.filter(function (p) { return p.id !== 0; });
+    if (ais.length < 2) return;
+    var a = pickOne(ais);
+    var rest = ais.filter(function (p) { return p.id !== a.id; });
+    var b = pickOne(rest);
+    var pair = pickOne(BANTER);
+    say(a.id, pair[0], 600);
+    say(b.id, pair[1], 2200);
+  }
+
+  // 摊牌反应：赢家大池 / 被同一个人连赢
+  function maybeShowdownTalk(result) {
+    if (!aiTalkingEnabled() || !result || !result.showdown) return;
+    var winners = result.winners || [];
+    if (!winners.length) return;
+    var meWin = winners.some(function (w) { return w.playerId === 0; });
+    var others = game.players.filter(function (p) { return p.id !== 0 && !p.folded; });
+    if (!others.length) return;
+    var who = pickOne(others);
+    var bb = (game.bigBlind || 20);
+    if (meWin && (result.pot || 0) >= bb * 25) {
+      say(who.id, pickOne(SHOWDOWN_LINES), 900);
+    } else if (!meWin && Math.random() < 0.25) {
+      var aw = winners.filter(function (w) { return w.playerId !== 0; });
+      if (aw.length) say(aw[0].playerId, '这手归我了', 900);
+    }
   }
 
   function showBubble(seat, text) {
@@ -3715,6 +3819,8 @@ window.GTO_TABLE = {
   function nextHand() {
     resultShown = false;
     messages = [];
+    _talkBudget = 2;
+    setTimeout(maybeBanter, 800);
     try {
       E.nextHand(game);
     } catch (e) {
@@ -4020,6 +4126,7 @@ window.GTO_TABLE = {
   }
 
   function showResult() {
+    maybeShowdownTalk(game.result);
     var me = game.players[0];
     var r = game.result;
     var won = 0;
