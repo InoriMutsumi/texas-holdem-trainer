@@ -8,10 +8,14 @@
 
 | 脚本 | 跑什么 | 用法 |
 |---|---|---|
-| `../test.js` | 规则引擎的 121 条断言（在根目录） | `node test.js` |
+| `../test.js` | 规则引擎的 127 条断言（在根目录） | `node test.js` |
 | `../check.js` | 语法检查 + DOM 桩冒烟，各桌型打完 10 手 | `node check.js` / `node check.js six` / `node check.js nine` |
 | `sixmax.js` | 6 人桌随机 60 手压测，抓崩溃 | `node 开发工具/sixmax.js` |
 | `repro-chips.js` | 筹码结算复现：短码全下 / 长码弃牌两种场景 | `node 开发工具/repro-chips.js` |
+| `audit.js` | 静态检查：死函数 / 死常量 / 无用 CSS / 调试残留 / 外链 | `node 开发工具/audit.js` |
+| `verify-settings.js` | 用 CDP 真点设置面板，验证主题与发牌风格两组按钮互不串台 | `node 开发工具/verify-settings.js` |
+| `audit.js` | 静态检查：死函数 / 死常量 / 无用 CSS / 调试残留 / 外链 | `node 开发工具/audit.js` |
+| `dealstyle-stats.js` | 发牌风格三档的牌型分布与玩家底牌质量对比 | `node 开发工具/dealstyle-stats.js 400` |
 
 ## AI 强度与「像不像人」
 
@@ -35,6 +39,18 @@
 | `gto-data.js` | 生成物，`index.html` 里已经内联了一份 |
 
 改 GTO 数据的顺序：`node 开发工具/build-gto.js` → `node 开发工具/inline-gto.js`。
+
+## 调参记录
+
+`dealstyle-stats.js` 是发牌风格（真实 / 热闹 / 炸裂）的对照组：每种风格跑 N 手，输出摊牌牌型分布、玩家底牌强度分布、平均重洗次数。改阈值前先跑一遍，别凭感觉。
+
+## 发牌风格调参
+
+`dealstyle-stats.js`：每种风格跑 N 手，输出摊牌牌型分布、玩家底牌强度分布、平均重洗次数。改阈值之前先跑一遍，别凭感觉。
+
+```bash
+node 开发工具/dealstyle-stats.js 400
+```
 
 ## 截图与演示图
 
