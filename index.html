@@ -155,10 +155,6 @@
     background: #f4f1e8; color: #1a1a1a; font-size: 11px; font-weight: 800;
     display: flex; align-items: center; justify-content: center;
   }
-  .status-tag {
-    position: absolute; left: 50%; transform: translateX(-50%); bottom: -20px;
-    font-size: 12px; color: #7f9489;
-  }
 
   /* ---------- 中央 ---------- */
   .center { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 12px; }
@@ -206,7 +202,6 @@
   }
   .log .l { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
   .log .l b { color: var(--text-soft); }
-  .log .l.street-mark { color: var(--gold); margin-top: 6px; }
 
   /* ---------- 底栏 ---------- */
   .actionbar {
@@ -269,7 +264,6 @@
   .modal .ai-guide b { color: #d8b862; }
   #setAi { width: 176px; }
   .modal .hand-line { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,.06); font-size: 13px; }
-  .modal .hand-line .mini-cards { display: flex; gap: 4px; }
   .modal .empty-tip { color: #7f9489; font-size: 13px; padding: 20px 0; text-align: center; }
   .modal .replay-line {
     display: flex; gap: 8px; align-items: baseline; font-size: 12px;
@@ -1319,13 +1313,6 @@ window.GTO_TABLE = {
     return [0].concat(rs);
   }
 
-  var COMBOS_7_5 = (function () {
-    var res = [];
-    for (var a = 0; a < 7; a++) for (var b = a + 1; b < 7; b++) for (var c = b + 1; c < 7; c++)
-      for (var d = c + 1; d < 7; d++) for (var e = d + 1; e < 7; e++) res.push([a, b, c, d, e]);
-    return res;
-  })();
-
   function cmpVal(a, b) {
     var n = Math.max(a.length, b.length);
     for (var i = 0; i < n; i++) {
@@ -2346,6 +2333,7 @@ window.GTO_TABLE = {
 
   function newGame() {
     streak.win = 0; streak.lose = 0;
+    resetPlans();
     var s = loadSettings();
     applyTheme(s.theme);
     var tm = String(location.search || '').match(/[?&]theme=(green|blue|wood)/);
@@ -2442,7 +2430,7 @@ window.GTO_TABLE = {
 
   function setAvatarFromFile(file) {
     if (!file) return;
-    if (!/^image\//.test(file.type || '')) { alert('只能选图片文件。'); return; }
+    if (!/^image\//.test(file.type || '')) { toast('只能选图片文件'); return; }
     var reader = new FileReader();
     reader.onload = function () {
       var img = new Image();
@@ -2455,7 +2443,7 @@ window.GTO_TABLE = {
         var url = cv.toDataURL('image/jpeg', 0.80);
         if (dataUrlBytes(url) > AVATAR_MAX_BYTES) url = cv.toDataURL('image/jpeg', 0.55);
         if (dataUrlBytes(url) > AVATAR_MAX_BYTES) {
-          alert('这张图压到 64×64 还有 ' + Math.ceil(dataUrlBytes(url) / 1024) + 'KB，超过 8KB，换一张吧。');
+          toast('这张图压到 64×64 还有 ' + Math.ceil(dataUrlBytes(url) / 1024) + 'KB，超过 8KB，换一张吧');
           return;
         }
         var st = loadSettings();
@@ -2472,10 +2460,10 @@ window.GTO_TABLE = {
         if (game) game.settings = st;
         renderSeats();
       };
-      img.onerror = function () { alert('这张图片读不出来，换一张试试。'); };
+      img.onerror = function () { toast('这张图片读不出来，换一张试试'); };
       img.src = reader.result;
     };
-    reader.onerror = function () { alert('读取文件失败。'); };
+    reader.onerror = function () { toast('读取文件失败'); };
     reader.readAsDataURL(file);
   }
 
@@ -3487,7 +3475,6 @@ window.GTO_TABLE = {
   }
 
   var SUIT4 = ['s', 'h', 'd', 'c'];
-  var RANK_VAL = { 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8, 9: 9, T: 10, J: 11, Q: 12, K: 13, A: 14 };
 
   // 翻前范围现在由 GTO 表提供（见上方 gtoSpot / gtoFreqFor），不再维护手写字符串表。
 
@@ -4496,7 +4483,6 @@ window.GTO_TABLE = {
     setTimeout(function () { document.body.classList.remove('shake'); }, 420);
   }
 
-  var BADBEAT_LINES = ['河牌救了我', '这就是德州，兄弟', '运气也是实力的一部分', '别急，下把还你'];
 
   var streak = { win: 0, lose: 0 };
 
@@ -5029,7 +5015,7 @@ window.GTO_TABLE = {
       document.body.removeChild(a);
       setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
     } catch (e) {
-      alert('导出失败：' + e.message);
+      toast('导出失败：' + e.message);
     }
   }
 
@@ -5077,10 +5063,10 @@ window.GTO_TABLE = {
             });
             LS.set('poker.notes.v2', n);
           }
-          alert('导入完成，新增 ' + added + ' 手。');
+          toast('导入完成，新增 ' + added + ' 手');
           showHistory();
         } catch (e) {
-          alert('导入失败：' + e.message);
+          toast('导入失败：' + e.message);
         }
       };
       r.readAsText(f);

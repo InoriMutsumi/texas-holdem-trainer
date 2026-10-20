@@ -16,7 +16,7 @@ const vm = require('vm');
 const ROOT_URL = 'https://raw.githubusercontent.com/matthiola0/poker-hand-review/main/gto-preflop/mtt/8max/charts/';
 const RAW_DIR = path.resolve(__dirname, 'raw');
 const MANIFEST = path.join(RAW_DIR, '_manifest.json');
-const OUT_FILE = path.resolve(__dirname, '..', 'gto-data.js');
+const OUT_FILE = path.resolve(__dirname, 'gto-data.js');
 
 const RANKS = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 const ACTION_ORDER = ['raise', 'call', 'allin', 'fold']; // 输出顺序 r c a f

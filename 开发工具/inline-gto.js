@@ -12,7 +12,7 @@ const path = require('path');
 
 const root = path.resolve(__dirname, '..');
 const htmlPath = path.join(root, 'index.html');
-const dataPath = path.join(root, 'gto-data.js');
+const dataPath = path.join(__dirname, 'gto-data.js');
 const TAG = '<script src="gto-data.js"></script>';
 
 let html = fs.readFileSync(htmlPath, 'utf8');

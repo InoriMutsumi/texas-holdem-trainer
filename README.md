@@ -267,20 +267,19 @@ AI 的性格**不会显示出来**。没有标签、没有悬停提示、牌谱�
 ├── index.html          ← 游戏本体（单文件，双击即玩）
 ├── README.md
 ├── LICENSE
-├── test.js             ← 引擎单元测试（104 条断言）
+├── test.js             ← 引擎单元测试（121 条断言）
 ├── check.js            ← 语法检查 + DOM 桩冒烟
-├── gto-data.js         ← GTO 翻前表数据源（已被内联进 index.html）
 ├── 资料/               ← 方案、验收、难度报告等文档
 ├── 截图/               ← 界面截图与演示 GIF
-└── 开发工具/           ← AI 对打、压测、截图、推送等脚本
+└── 开发工具/           ← AI 对打、压测、截图、推送等脚本（内含 README 索引）
 ```
 
 | 文件 | 作用 |
 |---|---|
 | `index.html` | 游戏本体，样式、引擎、界面、GTO 数据全内联，零依赖 |
-| `test.js` | 引擎单元测试，`node test.js`（104 条） |
+| `test.js` | 引擎单元测试，`node test.js`（121 条） |
 | `check.js` | 语法检查 + 无浏览器冒烟，`node check.js` / `check.js six` / `check.js nine` |
-| `gto-data.js` | GTO 翻前表源数据，30KB |
+| `开发工具/gto-data.js` | GTO 翻前表源数据，30KB（已在 `index.html` 内联一份） |
 | `资料/` | 设计文档：方案、后续开发方案、难度提升报告/方案、验收清单、自检报告、GPT 验收提示词 |
 | `开发工具/aibench.js` | 两档 AI 直接对打（`node 开发工具/aibench.js 300 normal hard`） |
 | `开发工具/aibench2.js` | 对打 + VPIP/PFR/WTSD 统计，调参用 |
@@ -290,6 +289,7 @@ AI 的性格**不会显示出来**。没有标签、没有悬停提示、牌谱�
 | `开发工具/bench.js` | 三档难度对打赛 |
 | `开发工具/style-bench.js` | 七种性格对打赛 |
 | `开发工具/build-gto.js` | 从上游重新抓 GTO 表（需联网） |
+| `开发工具/README.md` | 上面这些脚本的用途与口径索引 |
 | `开发工具/inline-gto.js` | 把 `gto-data.js` 内联进 `index.html` |
 | `开发工具/shot-mobile.js` | CDP 真机视口截图（Edge headless 的 `--window-size` 有 492px 下限，必须走 CDP） |
 | `开发工具/make-shots.sh` | 批量重截界面图 |
