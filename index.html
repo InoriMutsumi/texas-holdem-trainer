@@ -2282,125 +2282,6 @@ window.GTO_TABLE = {
     };
   })();
 
-  // ---------------- 语音（浏览器自带 TTS，零音频文件） ----------------
-  var Voice = (function () {
-    var V = { on: true, rate: 1.0, ready: false };
-    function load() {
-      var v = LS.get('poker.voice.v1', null);
-      if (v) { V.on = v.on !== false; V.rate = typeof v.rate === 'number' ? v.rate : 1.0; }
-      if ('speechSynthesis' in window) {
-        // Chrome / Edge 首次 getVoices() 常常是空数组，得等 voiceschanged 才有。
-        // 之前没监听这个事件，导致 supported() 一直 false、设置里显示「没有语音合成」，
-        // 而实际系统里装了中文音色——用户听到的就是一片安静。
-        try {
-          var tick = function () {
-            var vs = window.speechSynthesis.getVoices() || [];
-            if (vs.length) V.ready = true;
-          };
-          tick();
-          window.speechSynthesis.onvoiceschanged = tick;
-          if (!V.ready) setTimeout(tick, 600);
-        } catch (e) {}
-      }
-      return V;
-    }
-    function save() { LS.set('poker.voice.v1', { on: V.on, rate: V.rate }); }
-    function zhVoice() {
-      if (!V.ready) return null;
-      var vs = [];
-      try { vs = window.speechSynthesis.getVoices() || []; } catch (e) { return null; }
-      for (var i = 0; i < vs.length; i++) if (/^zh/i.test(vs[i].lang || '')) return vs[i];
-      return null;
-    }
-    function say(text, pitch) {
-      if (!V.on || !text) return;
-      if (!('speechSynthesis' in window)) return;
-      try {
-        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-        var u = new SpeechSynthesisUtterance(String(text).replace(/^[^一-龥A-Za-z0-9]+/, ''));
-        // 别硬绑 voice 对象：Edge 里绑定旧对象会静默失败（speaking=true 但没声音），
-        // 交给浏览器按 lang 自己挑，各版本都更稳。
-        u.lang = 'zh-CN';
-        u.rate = V.rate;
-        u.pitch = pitch || 1;
-        u.volume = 0.9;
-        // synthesis-failed 多半是本机 SAPI 引擎的问题；先退回「不指定语言」再试一次，
-        // 还不行就安静放弃，别每句话都在控制台里刷错误。
-        u.onerror = function (ev) {
-          if (ev && ev.error === 'synthesis-failed' && !u.__retried) {
-            u.__retried = true;
-            var u2 = new SpeechSynthesisUtterance(u.text);
-            u2.rate = u.rate;
-            u2.pitch = u.pitch;
-            u2.volume = u.volume;
-            try { window.speechSynthesis.speak(u2); } catch (e2) {}
-          }
-        };
-        window.speechSynthesis.speak(u);
-      } catch (e) {}
-    }
-    return {
-      init: load, save: save, say: say,
-      isOn: function () { return V.on; },
-      setOn: function (x) { V.on = !!x; save(); },
-      getRate: function () { return V.rate; },
-      setRate: function (x) { V.rate = Math.max(0.6, Math.min(1.6, Number(x) || 1)); save(); },
-      supported: function () { return ('speechSynthesis' in window); },
-      testVoice: function () {
-        if (!('speechSynthesis' in window)) return '这个浏览器没有语音合成，AI 语音用不了。';
-        var vs = [];
-        try { vs = window.speechSynthesis.getVoices() || []; } catch (e) {}
-        var zh = zhVoice();
-        var zhAll = vs.filter(function (v) { return /^zh/i.test(v.lang || ''); });
-        var zhNames = zhAll.slice(0, 4).map(function (v) { return v.name; }).join(' / ');
-        var head = '音色 ' + vs.length + ' 个，中文 ' + zhAll.length + ' 个'
-          + (zhNames ? '（' + zhNames + '）' : '（没找到）');
-        // 把真实结果挂到 window 上，方便用户按 F12 看，也让下面能同步显示
-        window.__voiceDiag = { voices: vs.length, zh: zh ? zh.name : null, ready: V.ready, state: window.speechSynthesis.speaking };
-        try {
-          // 只在真在说话时才 cancel：cancel 之后立刻 speak 在 Edge 上会被吞掉，
-          // 表现就是「引擎接受了、speaking=true、但一点声音都没有」。
-          if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
-          if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-          var u = new SpeechSynthesisUtterance('这手牌我加注，你跟不跟？');
-          // 不硬绑 voice 对象：Edge 里绑定旧对象会静默失败，交给浏览器按 lang 自己挑更稳。
-          u.lang = 'zh-CN';
-          u.rate = V.rate;
-          u.volume = 1;
-          var started = false, ended = false;
-          u.onstart = function () {
-            started = true;
-            var ne = $('voiceNote');
-            if (ne) ne.textContent = head + '｜引擎已开始播放（onstart 触发）。还听不到就是系统输出设备的问题。';
-          };
-          u.onend = function () { ended = true; };
-          u.onerror = function (ev) {
-            var ne = $('voiceNote');
-            if (ne) ne.textContent = head + '｜播放出错：' + (ev && ev.error ? ev.error : '未知');
-          };
-          try {
-            window.speechSynthesis.speak(u);
-          } catch (e) {
-            var ne0 = $('voiceNote');
-            if (ne0) ne0.textContent = head + '｜speak 失败：' + e.message;
-          }
-          setTimeout(function () {
-            if (!started && !ended) {
-              var ne = $('voiceNote');
-              if (ne && ne.textContent.indexOf('播放出错') < 0) {
-                ne.textContent = head + '｜1.4 秒内 onstart 没触发——edg 的语音通道被吞了（这个我们绕不过去，换 Chrome）。';
-              }
-            }
-          }, 1400);
-        } catch (e) {
-          return '调用失败：' + (e && e.message);
-        }
-        return head + '｜正在念，听到了吗？';
-      }
-    };
-  })();
-
 
   // ---------------- 本地存储 ----------------
   var LS = {
@@ -2412,9 +2293,6 @@ window.GTO_TABLE = {
       try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 配额满了就算了 */ }
     }
   };
-
-  // 语音初始化放在 LS 之后（load() 要读存储）
-  try { Voice.init(); } catch (e) {}
 
   function loadSettings() {
     var s = LS.get('poker.save.v2', null);
@@ -3094,7 +2972,7 @@ window.GTO_TABLE = {
   function pickOne(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
   // 说一句：占预算、延迟播放、写进本手 messages（牌谱可回看）
-  function say(seat, text, delay, speak) {
+  function say(seat, text, delay) {
     if (!aiTalkingEnabled() || !seat || seat === 0) return;
     if (_talkBudget <= 0) return;
     _talkBudget -= 1;
@@ -3102,7 +2980,6 @@ window.GTO_TABLE = {
     var d = delay || 0;
     setTimeout(function () {
       if (!game) return;
-      if (speak) { try { Voice.say(text, 0.92 + (seat % 4) * 0.06); } catch (e) {} }
       messages.push({
         id: 'msg-' + (messages.length + 1) + '-t',
         speakerId: seat,
@@ -3129,7 +3006,7 @@ window.GTO_TABLE = {
       return p.id !== 0 && p.id !== actorSeat && !p.folded;
     });
     if (!others.length) return;
-    say(pickOne(others).id, pickOne(REPLY[key]), 1200, true);
+    say(pickOne(others).id, pickOne(REPLY[key]), 1200);
   }
 
   // 连续 3 手没人说话，25% 概率两个 AI 一来一回
@@ -3143,7 +3020,7 @@ window.GTO_TABLE = {
     var rest = ais.filter(function (p) { return p.id !== a.id; });
     var b = pickOne(rest);
     var pair = pickOne(BANTER);
-    say(a.id, pair[0], 600, true);
+    say(a.id, pair[0], 600);
     say(b.id, pair[1], 2200);
   }
 
@@ -3158,10 +3035,10 @@ window.GTO_TABLE = {
     var who = pickOne(others);
     var bb = (game.bigBlind || 20);
     if (meWin && (result.pot || 0) >= bb * 25) {
-      say(who.id, pickOne(SHOWDOWN_LINES), 900, true);
+      say(who.id, pickOne(SHOWDOWN_LINES), 900);
     } else if (!meWin && Math.random() < 0.25) {
       var aw = winners.filter(function (w) { return w.playerId !== 0; });
-      if (aw.length) say(aw[0].playerId, '这手归我了', 900, true);
+      if (aw.length) say(aw[0].playerId, '这手归我了', 900);
     }
   }
 
@@ -4249,7 +4126,6 @@ window.GTO_TABLE = {
     if (text === _lastCheatTalk) return;
     _lastCheatTalk = text;
     showBubble(seat, text);
-    try { Voice.say(text, 0.86); } catch (e) {}
   }
 
   var _turnSoundAt = -1;
@@ -5470,17 +5346,6 @@ window.GTO_TABLE = {
       '<input type="checkbox" id="setSfx"' + (au.sfxOn ? ' checked' : '') + '></span></div>';
     html += '<div class="row"><span>音效音量</span><span>' +
       '<input type="range" id="setSfxVol" min="0" max="100" value="' + Math.round(au.sfxVol * 100) + '"></span></div>';
-    if (Voice.supported()) {
-      html += '<div class="row"><span>AI 语音</span><span>' +
-        '<input type="checkbox" id="setVoice"' + (Voice.isOn() ? ' checked' : '') + '></span></div>';
-      html += '<div class="row"><span>语音语速</span><span>' +
-        '<input type="range" id="setVoiceRate" min="0.6" max="1.6" step="0.05" value="' + Voice.getRate() + '"> <b id="setVoiceRateVal">' + Voice.getRate().toFixed(2) + 'x</b></span></div>';
-      html += '<div class="row"><span>试听一下</span><span>' +
-        '<button class="btn ghost" id="btnVoiceTest" style="padding:5px 12px;font-size:12px">念一句</button></span></div>';
-      html += '<div class="note" id="voiceNote">语音用系统自带的中文音色，AI 下注、全下、摊牌和嘴炮都会念。听不到就点「念一句」看看。</div>';
-    } else {
-      html += '<div class="note">这个浏览器没有语音合成，AI 语音不可用（不影响其它功能）。</div>';
-    }
     html += '<div class="note">改盲注会重开一局，本场手数与筹码保留。大盲不能小于小盲。</div>';
     html += '<div class="actions">' +
       '<button class="btn fold" id="btnCancelSet">取消</button>' +
@@ -5514,16 +5379,6 @@ window.GTO_TABLE = {
     });
     $('setMusic').onchange = function () { Sound.setMusic(this.checked); };
     $('setMusicVol').oninput = function () { Sound.setMusicVol(this.value / 100); };
-    if ($('setVoice')) $('setVoice').onchange = function () { Voice.setOn(this.checked); };
-    if ($('btnVoiceTest')) $('btnVoiceTest').onclick = function () {
-      var vt = Voice.testVoice();
-      var nt = $('voiceNote');
-      if (nt) nt.textContent = vt;
-    };
-    if ($('setVoiceRate')) $('setVoiceRate').oninput = function () {
-      Voice.setRate(this.value);
-      $('setVoiceRateVal').textContent = Voice.getRate().toFixed(2) + 'x';
-    };
     $('setSfx').onchange = function () { Sound.setSfx(this.checked); };
     $('setSfxVol').oninput = function () { Sound.setSfxVol(this.value / 100); };
     $('btnCancelSet').onclick = closeModal;

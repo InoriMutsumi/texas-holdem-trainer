@@ -49,7 +49,7 @@ function makeEl(tag) {
     removeChild(c) { this.children = this.children.filter(x => x !== c); },
     get onclick() { return this._handlers.click; },
     set onclick(f) { this._handlers.click = f; },
-    classList: { add() {}, remove() {}, toggle() {} }
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } }
   };
   let inner = '';
   Object.defineProperty(el, 'innerHTML', {
@@ -89,7 +89,8 @@ const sandbox = {
   clearTimeout: () => {},
   confirm: () => true,
   matchMedia: () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} }),
-  Date, Math, JSON
+  Date, Math, JSON,
+  addEventListener() {}, removeEventListener() {}
 };
 sandbox.window = sandbox;
 sandbox.globalThis = sandbox;
