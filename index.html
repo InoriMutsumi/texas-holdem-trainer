@@ -5374,7 +5374,8 @@ window.GTO_TABLE = {
     html += '<div class="note ai-guide">' +
       '<b>真实</b>——按真实概率发牌。德州扑克本来就大半是垃圾牌，连弃十手很正常，想学真东西用这个。<br>' +
       '<b>热闹</b>——每手至少有人能成两对以上（最多重洗 3 次）；连续弃 3 手后下一手保底给你能玩的底牌。牌更热闹，输赢仍然公平。<br>' +
-      '<b>炸裂</b>——每手至少三条以上（最多重洗 5 次）；连弃 2 手就保底。每把都有戏，但教学价值最低。' +
+      '<b>炸裂</b>——每手至少三条以上（最多重洗 5 次）；连弃 2 手就保底。每把都有戏，但教学价值最低。<br>' +
+      '<span class="dim">点一下立刻记住，从下一手开始生效。</span>' +
       '</div>';
     var au = Sound.get();
     html += '<div class="row"><span>背景音乐</span><span>' +
@@ -5408,6 +5409,11 @@ window.GTO_TABLE = {
         var b0 = document.querySelectorAll('#dealPick .theme-btn');
         for (var k = 0; k < b0.length; k++) b0[k].classList.remove('on');
         this.classList.add('on');
+        // 点一下立刻记住，不必等「保存并重开」；下一手开始生效
+        var st0 = loadSettings();
+        st0.dealStyle = this.getAttribute('data-deal');
+        saveSettings(st0);
+        if (game) game.dealStyle = st0.dealStyle;
       };
     }
     var curTheme = document.body.getAttribute('data-theme') || 'green';
