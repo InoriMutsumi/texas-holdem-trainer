@@ -517,6 +517,16 @@
     .modal .guide-tab { padding: 6px 12px; font-size: 12px; }
     .ch-card { padding: 10px 12px; }
     .ch-result .ch-act { flex-direction: column; }
+
+    .guide-tip, .guide-bar {
+      left: 12px !important; right: 12px !important; bottom: 152px !important;
+      transform: none !important;
+      flex-wrap: wrap !important; gap: 8px !important; padding: 10px 12px !important;
+      font-size: 12px !important; max-width: none !important;
+    }
+    .guide-bar #guideText, .guide-tip span { flex: 1 1 100% !important; }
+    .guide-bar .guide-step { flex: 1 !important; }
+    .guide-tip .btn, .guide-bar .btn { padding: 7px 12px !important; font-size: 12px !important; }
   }
 
   /* ---------------- 挑战模式 ---------------- */
@@ -536,6 +546,38 @@
   .ch-result.lose .ch-title { color: var(--lose); }
   .ch-result .ch-sub { font-size: 13px; color: var(--text-dim); margin: 2px 0; }
   .ch-result .ch-act { margin-top: 12px; display: flex; gap: 10px; justify-content: center; }
+
+  /* 等级与成就 */
+  .toast {
+    position: fixed; left: 50%; top: 64px; transform: translateX(-50%);
+    background: rgba(20,28,24,.97); border: 1px solid var(--gold); color: var(--gold);
+    padding: 8px 18px; border-radius: 20px; font-size: 13px; z-index: 80;
+    animation: toastIn .3s ease both; pointer-events: none;
+  }
+  .toast.out { opacity: 0; transition: opacity .6s; }
+  @keyframes toastIn { from { opacity: 0; transform: translate(-50%, -10px); } }
+  .ach-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin: 8px 0 4px; }
+  .ach { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+  .ach.on { border-color: var(--gold); background: rgba(212,175,55,.07); }
+  .ach-name { font-size: 13px; font-weight: 600; color: var(--text-dim); }
+  .ach.on .ach-name { color: var(--gold); }
+  .ach-desc { font-size: 11px; color: var(--text-soft); line-height: 1.35; }
+
+  /* 新手引导 */
+  .guide-tip, .guide-bar {
+    position: fixed; left: 50%; transform: translateX(-50%);
+    bottom: 104px; z-index: 60;
+    background: rgba(18,26,22,.97); border: 1px solid var(--accent);
+    border-radius: 12px; padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px;
+    max-width: min(720px, calc(100vw - 40px));
+    font-size: 13px; line-height: 1.5; box-shadow: 0 10px 34px rgba(0,0,0,.55);
+  }
+  .guide-bar { bottom: 104px; border-color: var(--gold); }
+  .guide-bar #guideText { flex: 1; }
+  .guide-bar .guide-step { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
+  .guide-tip .btn, .guide-bar .btn { padding: 8px 16px; font-size: 13px; white-space: nowrap; }
+  .guide-tip .btn-mini, .guide-bar .btn-mini { white-space: nowrap; }
 
   /* 大赢庆祝 */
   .big-win {
@@ -647,6 +689,19 @@
       </div>
       <div class="log" id="log"></div>
     </aside>
+  </div>
+
+  <div class="guide-tip" id="guideTip" style="display:none">
+    <span>第一次玩？要不要看一遍手把手的引导？</span>
+    <button class="btn check" id="guideStart">看一遍</button>
+    <button class="btn-mini" id="guideNo">不用了</button>
+  </div>
+
+  <div class="guide-bar" id="guideBar" style="display:none">
+    <span id="guideText"></span>
+    <span class="guide-step" id="guideStep">1/6</span>
+    <button class="btn raise" id="guideNext">下一步</button>
+    <button class="btn-mini" id="guideSkip">退出</button>
   </div>
 
   <footer class="actionbar">
@@ -3652,6 +3707,7 @@ window.GTO_TABLE = {
     updateMind(game);
     saveHand();
     saveSettings({ chips: game.players[0].chips, hands: game.handsPlayed, rebuys: game.rebuys });
+    try { updateProfile(); } catch (e) {}
     checkChallenge();
     showResult();
   }
@@ -3715,6 +3771,8 @@ window.GTO_TABLE = {
 
   // ---------------- 弹层 ----------------
   function openModal(html) {
+    var gt = $('guideTip');
+    if (gt) gt.style.display = 'none';
     $('modal').innerHTML = html;
     $('overlay').classList.add('show');
   }
@@ -4235,6 +4293,111 @@ window.GTO_TABLE = {
       '<div class="sc-tip">' + tip + '</div></div>';
   }
 
+  // ---------------- 等级与成就 ----------------
+  var LEVELS = [
+    { h: 0, name: '新手上桌' },
+    { h: 100, name: '常客' },
+    { h: 500, name: '老手' },
+    { h: 2000, name: '牌桌灵魂' }
+  ];
+  var ACHIEVEMENTS = [
+    { key: 'firstWin', name: '第一桶金', desc: '第一次赢下底池' },
+    { key: 'bigPot', name: '大赢家', desc: '单个底池赢到 5000 以上' },
+    { key: 'ironhead', name: '铁头', desc: '连续 10 手不弃牌' },
+    { key: 'desperado', name: '亡命徒', desc: '全下并赢下 3 次' },
+    { key: 'comeback', name: '翻身', desc: '从 1000 打到 5000' },
+    { key: 'marathon', name: '马拉松', desc: '累计打满 2000 手' },
+    { key: 'challenger', name: '挑战者', desc: '通关任意挑战模式' },
+    { key: 'chosen', name: '天选', desc: '拿到四条或以上并赢下' }
+  ];
+
+  function defaultProfile() {
+    return { schemaVersion: 1, hands: 0, level: 0, achievements: {}, streakNoFold: 0, allInWins: 0, minChips: 0, maxChips: 0 };
+  }
+
+  function loadProfile() {
+    var p = LS.get('poker.profile.v1', null);
+    if (!p || typeof p !== 'object') return defaultProfile();
+    var d = defaultProfile();
+    Object.keys(d).forEach(function (k) { if (p[k] === undefined) p[k] = d[k]; });
+    if (!p.achievements || typeof p.achievements !== 'object') p.achievements = {};
+    return p;
+  }
+
+  function saveProfile(p) { LS.set('poker.profile.v1', p); }
+
+  function levelOf(hands) {
+    var lv = 0;
+    for (var i = 0; i < LEVELS.length; i++) if (hands >= LEVELS[i].h) lv = i;
+    return lv;
+  }
+
+  function unlock(p, key) {
+    if (p.achievements[key]) return false;
+    p.achievements[key] = true;
+    return true;
+  }
+
+  function toast(msg) {
+    var el = document.createElement('div');
+    el.className = 'toast';
+    el.textContent = msg;
+    document.body.appendChild(el);
+    setTimeout(function () { if (el.classList) el.classList.add('out'); }, 2200);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2900);
+  }
+
+  function updateProfile() {
+    if (!game || !game.players) return;
+    var p = loadProfile();
+    var me = game.players[0];
+    var won = 0;
+    (game.result && game.result.winners || []).forEach(function (w) {
+      if (w.playerId === 0) won += (w.amount || 0);
+    });
+    var got = [];
+
+    p.hands += 1;
+
+    if (won > 0 && unlock(p, 'firstWin')) got.push('firstWin');
+    if (won >= 5000 && unlock(p, 'bigPot')) got.push('bigPot');
+
+    if (me.folded) p.streakNoFold = 0;
+    else {
+      p.streakNoFold += 1;
+      if (p.streakNoFold >= 10 && unlock(p, 'ironhead')) got.push('ironhead');
+    }
+
+    if (me.allIn && won > 0) {
+      p.allInWins += 1;
+      if (p.allInWins >= 3 && unlock(p, 'desperado')) got.push('desperado');
+    }
+
+    if (game.result && game.result.showdown && won > 0) {
+      try {
+        var ev = E.eval7(me.hole.concat(game.board));
+        if (ev && ev[0] >= 7 && unlock(p, 'chosen')) got.push('chosen');
+      } catch (e) {}
+    }
+
+    var chips = me.chips;
+    if (!p.minChips || chips < p.minChips) p.minChips = chips;
+    if (chips > (p.maxChips || 0)) p.maxChips = chips;
+    if (p.minChips <= 1000 && p.maxChips >= 5000 && unlock(p, 'comeback')) got.push('comeback');
+    if (p.hands >= 2000 && unlock(p, 'marathon')) got.push('marathon');
+
+    var newLevel = levelOf(p.hands);
+    var leveled = newLevel > p.level;
+    p.level = newLevel;
+    saveProfile(p);
+
+    if (leveled) toast('升格：' + LEVELS[newLevel].name);
+    got.forEach(function (k, i) {
+      var a = ACHIEVEMENTS.filter(function (x) { return x.key === k; })[0];
+      if (a) setTimeout(function () { toast('成就解锁：' + a.name); }, 400 + i * 900);
+    });
+  }
+
   function showStats() {
     var st = computeStats();
     if (!st.total) {
@@ -4257,8 +4420,23 @@ window.GTO_TABLE = {
         (st.pos[k].net >= 0 ? '+' : '') + st.pos[k].net + '</span></div>';
     });
     html += '<div class="note">VPIP / PFR 只看翻前主动投入，被盲注逼着跟的不算。位置按发牌时的按钮位算。</div>';
+
+    var pf = loadProfile();
+    html += '<div class="review-title">等级与成就</div>';
+    html += '<div class="row"><span><b style="color:var(--gold)">' + LEVELS[pf.level].name + '</b></span><span>累计 ' + pf.hands + ' 手</span></div>';
+    html += '<div class="ach-grid">';
+    ACHIEVEMENTS.forEach(function (a) {
+      var on = !!pf.achievements[a.key];
+      html += '<div class="ach' + (on ? ' on' : '') + '" title="' + a.desc + '">' +
+        '<span class="ach-name">' + (on ? a.name : '？？？') + '</span>' +
+        '<span class="ach-desc">' + (on ? a.desc : '未解锁') + '</span></div>';
+    });
+    html += '</div>';
     html += '<div class="actions"><button class="btn check" id="btnCloseStats">关闭</button></div>';
     openModal(html);
+    if (/[?&]scrollbottom=1/.test(location.search)) {
+      setTimeout(function () { var m = document.querySelector('.modal'); if (m) m.scrollTop = m.scrollHeight; }, 200);
+    }
     $('btnCloseStats').onclick = closeModal;
   }
 
@@ -4729,6 +4907,12 @@ window.GTO_TABLE = {
   }
 
   function finishChallenge(result) {
+    if (result === 'win') {
+      try {
+        var pf = loadProfile();
+        if (unlock(pf, 'challenger')) { saveProfile(pf); setTimeout(function () { toast('成就解锁：挑战者'); }, 600); }
+      } catch (e) {}
+    }
     challenge.active = false;
     challenge.result = result;
     var best = loadChallengeBest();
@@ -4997,6 +5181,59 @@ window.GTO_TABLE = {
       document.removeEventListener(evt, once);
     }, { once: true });
   });
+
+  // ---------------- 新手引导（提示条，不强制） ----------------
+  var GUIDE_STEPS = [
+    '这两张是你的底牌，只有你能看见。对手的牌要等到摊牌才知道。',
+    '轮到你时，花一个大盲就能看翻牌——点「跟注」试试。不想花就点「弃牌」，损失已投的筹码。',
+    '翻牌发三张公共牌，所有人都能用。你的最终牌型 = 底牌 2 张 + 公共牌 5 张里最强的 5 张。',
+    '转牌是第四张公共牌。牌面越接近完整，下注越大——这时候「底池赔率」才真正重要。',
+    '河牌是最后一张，接下来就比大小。右侧「所需胜率」是这一手跟注划不划算的临界点。',
+    '结算了。点「下一手」继续；想看刚才哪一步打错了，每手结束的「复盘讲评」会逐条告诉你。'
+  ];
+  var guideActive = false, guideIdx = 0;
+
+  function markGuideDone() {
+    try { LS.set('poker.guide.v1.done', true); } catch (e) {}
+  }
+
+  function renderGuide() {
+    var bar = $('guideBar');
+    if (!bar) return;
+    if (!guideActive) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    $('guideText').textContent = GUIDE_STEPS[guideIdx];
+    $('guideStep').textContent = (guideIdx + 1) + '/' + GUIDE_STEPS.length;
+    $('guideNext').textContent = guideIdx >= GUIDE_STEPS.length - 1 ? '知道了' : '下一步';
+  }
+
+  function startGuide() {
+    guideActive = true; guideIdx = 0;
+    $('guideTip').style.display = 'none';
+    renderGuide();
+  }
+
+  function endGuide() {
+    guideActive = false;
+    markGuideDone();
+    renderGuide();
+  }
+
+  function maybeShowGuideTip() {
+    if (LS.get('poker.guide.v1.done', false)) return;
+    var tip = $('guideTip');
+    if (tip) tip.style.display = 'flex';
+  }
+
+  $('guideStart').onclick = startGuide;
+  $('guideNo').onclick = function () { $('guideTip').style.display = 'none'; markGuideDone(); };
+  $('guideNext').onclick = function () {
+    if (guideIdx >= GUIDE_STEPS.length - 1) return endGuide();
+    guideIdx++; renderGuide();
+  };
+  $('guideSkip').onclick = endGuide;
+  setTimeout(maybeShowGuideTip, 600);
+  if (/[?&]tutorial=1/.test(location.search)) setTimeout(startGuide, 800);
 
   // 调试：?settings=1 直接打开设置弹层（截图与自查用）
   if (/[?&]settings=1/.test(location.search)) setTimeout(showSettings, 300);
