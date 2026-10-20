@@ -2125,7 +2125,7 @@ window.GTO_TABLE = {
   // =====================================================================
   var Sound = (function () {
     var ctx = null, musicBus = null, sfxBus = null;
-    var S = { musicOn: true, sfxOn: true, musicVol: 0.28, sfxVol: 0.55 };
+    var S = { musicOn: true, sfxOn: true, musicVol: 0.42, sfxVol: 0.62 };
     var musicTimer = null, musicRunning = false, step = 0;
 
     try {
@@ -2240,15 +2240,15 @@ window.GTO_TABLE = {
       var ch = CHORDS[step % CHORDS.length];
       var arp = [0, 2, 1, 3, 4, 3, 1, 2];
       for (var i = 0; i < 8; i++) {
-        tone(midi(ch.notes[arp[i] % ch.notes.length]), t + i * (BAR / 8), 0.55, 'triangle', 0.042, musicBus);
+        tone(midi(ch.notes[arp[i] % ch.notes.length]), t + i * (BAR / 8), 0.55, 'triangle', 0.075, musicBus);
       }
-      tone(midi(ch.root), t, 0.9, 'sine', 0.085, musicBus);
-      tone(midi(ch.root), t + BAR / 2, 0.9, 'sine', 0.070, musicBus);
-      tone(midi(ch.notes[0]), t, BAR + 0.4, 'sine', 0.028, musicBus, -6);
-      tone(midi(ch.notes[2]), t, BAR + 0.4, 'sine', 0.024, musicBus, 7);
+      tone(midi(ch.root), t, 0.9, 'sine', 0.130, musicBus);
+      tone(midi(ch.root), t + BAR / 2, 0.9, 'sine', 0.105, musicBus);
+      tone(midi(ch.notes[0]), t, BAR + 0.4, 'sine', 0.048, musicBus, -6);
+      tone(midi(ch.notes[2]), t, BAR + 0.4, 'sine', 0.040, musicBus, 7);
       if (Math.random() < 0.30) {
         var hi = ch.notes[Math.floor(Math.random() * ch.notes.length)] + 24;
-        tone(midi(hi), t + Math.random() * BAR, 1.4, 'sine', 0.018, musicBus);
+        tone(midi(hi), t + Math.random() * BAR, 1.4, 'sine', 0.030, musicBus);
       }
       step++;
     }
@@ -2289,8 +2289,18 @@ window.GTO_TABLE = {
       var v = LS.get('poker.voice.v1', null);
       if (v) { V.on = v.on !== false; V.rate = typeof v.rate === 'number' ? v.rate : 1.0; }
       if ('speechSynthesis' in window) {
-        try { window.speechSynthesis.getVoices(); } catch (e) {}
-        V.ready = true;
+        // Chrome / Edge 首次 getVoices() 常常是空数组，得等 voiceschanged 才有。
+        // 之前没监听这个事件，导致 supported() 一直 false、设置里显示「没有语音合成」，
+        // 而实际系统里装了中文音色——用户听到的就是一片安静。
+        try {
+          var tick = function () {
+            var vs = window.speechSynthesis.getVoices() || [];
+            if (vs.length) V.ready = true;
+          };
+          tick();
+          window.speechSynthesis.onvoiceschanged = tick;
+          if (!V.ready) setTimeout(tick, 600);
+        } catch (e) {}
       }
       return V;
     }
@@ -2303,12 +2313,14 @@ window.GTO_TABLE = {
       return null;
     }
     function say(text, pitch) {
-      if (!V.on || !V.ready || !text) return;
+      if (!V.on || !text) return;
+      if (!('speechSynthesis' in window)) return;
       try {
         window.speechSynthesis.cancel();
         var u = new SpeechSynthesisUtterance(String(text).replace(/^[^一-龥A-Za-z0-9]+/, ''));
         var v = zhVoice();
         if (v) u.voice = v;
+        // 找不到具体音色也让浏览器按 lang 自己挑，不要直接不念
         u.lang = v ? v.lang : 'zh-CN';
         u.rate = V.rate;
         u.pitch = pitch || 1;
@@ -2322,7 +2334,28 @@ window.GTO_TABLE = {
       setOn: function (x) { V.on = !!x; save(); },
       getRate: function () { return V.rate; },
       setRate: function (x) { V.rate = Math.max(0.6, Math.min(1.6, Number(x) || 1)); save(); },
-      supported: function () { return ('speechSynthesis' in window) && !!zhVoice; }
+      supported: function () { return ('speechSynthesis' in window); },
+      testVoice: function () {
+        if (!('speechSynthesis' in window)) return '这个浏览器没有语音合成，AI 语音用不了。';
+        var vs = [];
+        try { vs = window.speechSynthesis.getVoices() || []; } catch (e) {}
+        var zh = zhVoice();
+        if (!zh) {
+          return '系统里没找到中文音色（一共 ' + vs.length + ' 个）。Windows 可以在「设置 → 时间和语言 → 语音」里装一个中文语音包，装完刷新页面。';
+        }
+        try {
+          window.speechSynthesis.cancel();
+          var u = new SpeechSynthesisUtterance('这手牌我加注，你跟不跟？');
+          u.voice = zh;
+          u.lang = zh.lang;
+          u.rate = V.rate;
+          u.volume = 1;
+          window.speechSynthesis.speak(u);
+        } catch (e) {
+          return '调用失败：' + (e && e.message);
+        }
+        return '正在用「' + zh.name + '」念。听到了吗？听不到多半是系统音量或浏览器静音。';
+      }
     };
   })();
 
@@ -3049,12 +3082,12 @@ window.GTO_TABLE = {
     else if (action.type === 'raise' && (action.amount || 0) >= (game.pot || 1) * 0.5) key = 'raise';
     else if (action.type === 'fold' && Math.random() < 0.18) key = 'fold';
     if (!key) return;
-    if (Math.random() > 0.30) return;
+    if (Math.random() > 0.45) return;
     var others = game.players.filter(function (p) {
       return p.id !== 0 && p.id !== actorSeat && !p.folded;
     });
     if (!others.length) return;
-    say(pickOne(others).id, pickOne(REPLY[key]), 1200, key === 'allin');
+    say(pickOne(others).id, pickOne(REPLY[key]), 1200, true);
   }
 
   // 连续 3 手没人说话，25% 概率两个 AI 一来一回
@@ -3068,7 +3101,7 @@ window.GTO_TABLE = {
     var rest = ais.filter(function (p) { return p.id !== a.id; });
     var b = pickOne(rest);
     var pair = pickOne(BANTER);
-    say(a.id, pair[0], 600);
+    say(a.id, pair[0], 600, true);
     say(b.id, pair[1], 2200);
   }
 
@@ -5400,7 +5433,9 @@ window.GTO_TABLE = {
         '<input type="checkbox" id="setVoice"' + (Voice.isOn() ? ' checked' : '') + '></span></div>';
       html += '<div class="row"><span>语音语速</span><span>' +
         '<input type="range" id="setVoiceRate" min="0.6" max="1.6" step="0.05" value="' + Voice.getRate() + '"> <b id="setVoiceRateVal">' + Voice.getRate().toFixed(2) + 'x</b></span></div>';
-      html += '<div class="note">语音用系统自带的中文音色，念的是 AI 全下、摊牌嘲讽和嘴炮那几句，不会每句都念。</div>';
+      html += '<div class="row"><span>试听一下</span><span>' +
+        '<button class="btn ghost" id="btnVoiceTest" style="padding:5px 12px;font-size:12px">念一句</button></span></div>';
+      html += '<div class="note" id="voiceNote">语音用系统自带的中文音色，AI 下注、全下、摊牌和嘴炮都会念。听不到就点「念一句」看看。</div>';
     } else {
       html += '<div class="note">这个浏览器没有语音合成，AI 语音不可用（不影响其它功能）。</div>';
     }
@@ -5438,6 +5473,11 @@ window.GTO_TABLE = {
     $('setMusic').onchange = function () { Sound.setMusic(this.checked); };
     $('setMusicVol').oninput = function () { Sound.setMusicVol(this.value / 100); };
     if ($('setVoice')) $('setVoice').onchange = function () { Voice.setOn(this.checked); };
+    if ($('btnVoiceTest')) $('btnVoiceTest').onclick = function () {
+      var vt = Voice.testVoice();
+      var nt = $('voiceNote');
+      if (nt) nt.textContent = vt;
+    };
     if ($('setVoiceRate')) $('setVoiceRate').oninput = function () {
       Voice.setRate(this.value);
       $('setVoiceRateVal').textContent = Voice.getRate().toFixed(2) + 'x';
@@ -5867,6 +5907,8 @@ window.GTO_TABLE = {
 
   function maybeShowGuideTip() {
     if (LS.get('poker.guide.v1.done', false)) return;
+    // 已经开着弹层就别再冒出来盖在人家上面
+    if ($('overlay') && $('overlay').classList.contains('show')) return;
     var tip = $('guideTip');
     if (tip) tip.style.display = 'flex';
   }

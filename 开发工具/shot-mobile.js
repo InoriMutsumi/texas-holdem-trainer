@@ -14,6 +14,7 @@ const OUT = process.argv[3];
 const W = +(process.argv[4] || 390);
 const H = +(process.argv[5] || 844);
 const DPR = +(process.argv[6] || 2);
+const SCROLL = process.argv[7] || '';   // 可选：截图前执行的一段 JS（例如滚到底）
 
 if (!URL || !OUT) {
   console.error('用法: node _shot_mobile.js <url> <输出png> [宽] [高] [dpr]');
@@ -79,7 +80,10 @@ async function waitPort() {
   await send('Page.navigate', { url: URL });
   await new Promise(r => setTimeout(r, 3800));
 
-  const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
+  if (SCROLL) {
+  try { await send('Runtime.evaluate', { expression: SCROLL }); await wait(400); } catch (e) {}
+}
+const shot = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false });
   fs.writeFileSync(OUT, Buffer.from(shot.result.data, 'base64'));
   console.log('已保存 ' + OUT + '（' + W + '×' + H + ' @' + DPR + 'x）');
 
