@@ -1831,6 +1831,24 @@ window.GTO_TABLE = {
     g.handOver = true;
 
     var alive = alivePlayers(g);
+
+    // 未被跟注的超额投入必须退还（TDA：uncalled bet returned）
+    // 即使投入者已经弃牌：他投到「所有未弃牌玩家最高投入」以上的部分没人能跟，
+    // 必须退回，否则短筹码全下时会把长筹码多押的钱一并赢走。
+    g.refunds = g.refunds || [];
+    if (alive.length > 0) {
+      var maxAlive = alive.reduce(function (m, p) { return Math.max(m, p.totalBet); }, 0);
+      g.players.forEach(function (p) {
+        if (p.totalBet > maxAlive) {
+          var excess = p.totalBet - maxAlive;
+          p.chips += excess;
+          p.totalBet = maxAlive;
+          g.pot -= excess;
+          g.refunds.push({ playerId: p.id, amount: excess });
+        }
+      });
+    }
+
     var pots = mergeDeadLayers(g, buildLayers(g));
     g.sidePots = pots.map(function (p) {
       return { amount: p.amount, eligible: p.eligible.slice(), resolution: p.resolution, winnerId: p.winnerId };
@@ -1839,7 +1857,7 @@ window.GTO_TABLE = {
     var totalBefore = g.players.reduce(function (s, p) { return s + p.totalBet; }, 0);
     var potSum = pots.reduce(function (s, p) { return s + p.amount; }, 0);
     var refundSum = g.refunds.reduce(function (s, p) { return s + p.amount; }, 0);
-    if (potSum + refundSum !== totalBefore) {
+    if (potSum !== totalBefore) {
       throw new Error('守恒断言失败：sidePots=' + potSum + ' refunds=' + refundSum + ' totalBet=' + totalBefore);
     }
 

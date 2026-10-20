@@ -430,6 +430,56 @@ section('26 eval7 五张输入');
   ok(threw, '少于 5 张直接抛错');
 }
 
+// ---------- 27. 未被跟注的超额投入必须退还 ----------
+section('27 退还未被跟注的投入');
+{
+  // 场景：短筹码全下 1000，长筹码投 5000 后弃牌。
+  // 标准规则：长筹码多押的 4000 没人能跟，必须退回；短筹码只赢 2000。
+  const g = E.createGame({ mode: 'six', startingChips: 5000, seed: 7 });
+  E.startHand(g);
+  const ps = g.players;
+  ps[0].chips = 0; ps[0].totalBet = 5000; ps[0].allIn = true; ps[0].folded = true;
+  ps[1].chips = 0; ps[1].totalBet = 1000; ps[1].allIn = true;
+  for (let i = 2; i < 6; i++) ps[i].folded = true;
+  g.pot = 6000;
+  g.board = [];
+  E.settle(g);
+  eq(ps[0].chips, 4000, '长筹码退回 4000');
+  eq(ps[1].chips, 2000, '短筹码只赢 2000');
+  eq(ps[0].chips + ps[1].chips, 6000, '筹码守恒');
+  eq(g.refunds.length, 1, '记录了一笔退款');
+  eq(g.refunds[0].amount, 4000, '退款金额 4000');
+}
+{
+  // 摊牌路径同样要退：短筹码全下 1000 摊牌赢，长筹码的 4000 也要回来
+  const g = E.createGame({ mode: 'hu', startingChips: 5000, seed: 8 });
+  E.startHand(g);
+  const p0 = g.players[0], p1 = g.players[1];
+  p0.chips = 0; p0.totalBet = 5000; p0.allIn = true;
+  p1.chips = 0; p1.totalBet = 1000; p1.allIn = true;
+  g.pot = 6000;
+  const C = (r, s) => ({ r, s });
+  g.board = [C(2, 'h'), C(7, 'c'), C(9, 'd'), C(11, 's'), C(3, 'h')];
+  p0.hole = [C(4, 'c'), C(5, 'd')];
+  p1.hole = [C(14, 'h'), C(14, 'd')];
+  E.settle(g);
+  eq(p0.chips, 4000, '摊牌：长筹码退回 4000');
+  eq(p1.chips, 2000, '摊牌：短筹码只赢 2000');
+}
+{
+  // 两人都投同样的钱：没有超额，不该产生退款
+  const g = E.createGame({ mode: 'hu', startingChips: 2000, seed: 9 });
+  E.startHand(g);
+  const p0 = g.players[0], p1 = g.players[1];
+  p0.chips = 0; p0.totalBet = 1000; p0.allIn = true; p0.folded = true;
+  p1.chips = 0; p1.totalBet = 1000; p1.allIn = true;
+  g.pot = 2000;
+  g.board = [];
+  E.settle(g);
+  eq(g.refunds.length, 0, '双方投入相同，无退款');
+  eq(p1.chips, 2000, '赢家拿走全部 2000');
+}
+
 // ---------- 汇总 ----------
 console.log('\n========================================');
 console.log('通过 ' + pass + '，失败 ' + fail);
