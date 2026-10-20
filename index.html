@@ -553,6 +553,32 @@
   .ach-desc { font-size: 11px; color: var(--text-soft); line-height: 1.35; }
 
   /* 新手引导 */
+  /* ---------------- 起手牌范围矩阵 ---------------- */
+  .rc-head { display: flex; align-items: center; justify-content: space-between; margin: 8px 0 4px; }
+  .rc-label { font-size: 11px; color: var(--text-dim); letter-spacing: .3px; }
+  .rc-open { background: none; border: 1px solid var(--line); color: var(--text-dim);
+    border-radius: 4px; font-size: 11px; line-height: 1; padding: 3px 5px; cursor: pointer; }
+  .rc-open:hover { color: var(--gold); border-color: var(--gold); }
+  .rc-wrap { display: flex; flex-direction: column; gap: 2px; }
+  .rc-rk { width: 12px; flex: 0 0 12px; font-size: 8px; color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center; }
+  .rc-top .rc-rk { height: 12px; }
+  .rc-row { display: flex; gap: 2px; }
+  .rc-cell { width: 15px; height: 15px; border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(0,0,0,.25); }
+  .rc-cell.mine { box-shadow: 0 0 0 2px #fff, 0 0 8px rgba(255,255,255,.55); position: relative; z-index: 1; }
+  .rc-legend { display: flex; align-items: center; gap: 4px; margin-top: 6px; font-size: 10px; color: var(--text-dim); }
+  .rc-legend i { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+  .lg-r { background: #2f7d4e; } .lg-c { background: #3b6ea8; margin-left: 6px; } .lg-f { background: #2a332d; margin-left: 6px; }
+
+  .rc-big { display: flex; flex-direction: column; gap: 1px; margin: 10px 0; }
+  .rc-big .rc-row { gap: 1px; }
+  .rc-big .rc-cell { width: 40px; height: 34px; border-radius: 3px; display: flex;
+    align-items: center; justify-content: center; font-size: 11px; font-weight: 600;
+    color: rgba(255,255,255,.82); letter-spacing: -.2px; }
+  .rc-big .rc-cell.dim { color: rgba(255,255,255,.22); }
+  .rc-big .rc-cell.mine { box-shadow: 0 0 0 2px #fff, 0 0 10px rgba(255,255,255,.5); }
+
+
   .guide-tip, .guide-bar {
     position: fixed; left: 50%; transform: translateX(-50%);
     bottom: 104px; z-index: 60;
@@ -782,6 +808,12 @@
       <div class="info-section">
         <h4>起手牌参考</h4>
         <div class="hand-tip" id="handTip">—</div>
+        <div class="rc-head">
+          <span class="rc-label" id="rcLabel">开池</span>
+          <button class="rc-open" id="btnRangeChart" title="放大看">⤢</button>
+        </div>
+        <div class="rc-wrap" id="rangeChart"></div>
+        <div class="rc-legend"><i class="lg-r"></i>加注 <i class="lg-c"></i>跟注 <i class="lg-f"></i>弃牌</div>
       </div>
       <div class="log" id="log"></div>
     </aside>
@@ -2687,6 +2719,106 @@ window.GTO_TABLE = {
     return 'GTO｜' + spotName + '：' + parts.join(' / ') + tail;
   }
 
+  // ---------------- 起手牌范围矩阵 ----------------
+  // 13×13：上三角同花、下三角非同花、对角线对子。
+  // 每格颜色按「进入率」深浅，当前手牌那格镶白边。
+  var CHART_RANKS = ['A','K','Q','J','T','9','8','7','6','5','4','3','2'];
+
+  function chartKey(i, j) {
+    if (i === j) return CHART_RANKS[i] + CHART_RANKS[i];
+    var hi = CHART_RANKS[Math.min(i, j)], lo = CHART_RANKS[Math.max(i, j)];
+    return hi + lo + (i < j ? 's' : 'o');
+  }
+
+  // 五级色阶：纯加注最亮，混合频率明显暗一档，弃牌几乎黑。
+  // 之前只分三级，44% 混合的格子和 100% 加注看起来一样，整张图像一片草原。
+  function chartColor(f) {
+    if (!f) return '#171c19';
+    var s = f.r + f.c * 0.55 + f.a;
+    if (s >= 0.95) return '#3aa36c';
+    if (s >= 0.70) return '#2f8757';
+    if (s >= 0.45) return '#266d47';
+    if (s >= 0.20) return '#1e5036';
+    if (s > 0.005) return '#1a3527';
+    return '#171c19';
+  }
+
+  // 当前该看哪张表：翻前有人加注看应对表，否则看开池表
+  function chartSpotKey() {
+    if (!game || !GTO) return null;
+    var key = (game.street === 'preflop' && !game.handOver) ? gtoSpot(game, 0) : null;
+    if (!key) key = 'rfi/' + gtoPos(0);
+    return key;
+  }
+
+  function chartSpotName(key) {
+    if (!key) return '无 GTO 表';
+    if (key.indexOf('rfi/') === 0) return '开池 · ' + key.slice(4);
+    if (key.indexOf('vs-open/') === 0) return '应对 · ' + key.slice(8);
+    return key;
+  }
+
+  function myHoleKey() {
+    if (!game) return null;
+    var me = game.players[0];
+    return (me && me.hole && me.hole.length === 2) ? holeKey(me.hole) : null;
+  }
+
+  function renderRangeChart() {
+    var el = $('rangeChart');
+    if (!el) return;
+    var key = chartSpotKey();
+    var row = (key && GTO && GTO.spots[key]) ? GTO.spots[key] : null;
+    var mine = myHoleKey();
+    var html = '<div class="rc-row rc-top"><span class="rc-rk"></span>';
+    for (var t = 0; t < 13; t++) html += '<span class="rc-rk">' + CHART_RANKS[t] + '</span>';
+    html += '</div>';
+    for (var i = 0; i < 13; i++) {
+      html += '<div class="rc-row"><span class="rc-rk">' + CHART_RANKS[i] + '</span>';
+      for (var j = 0; j < 13; j++) {
+        var k = chartKey(i, j);
+        var idx = GTO_IDX[k];
+        var f = (row && idx !== undefined) ? parseGtoCode(row[idx]) : null;
+        html += '<div class="rc-cell' + (k === mine ? ' mine' : '') +
+                '" style="background:' + chartColor(f) + '" title="' + k + '"></div>';
+      }
+      html += '</div>';
+    }
+    el.innerHTML = html;
+    var lab = $('rcLabel');
+    if (lab) lab.textContent = chartSpotName(key);
+  }
+
+  function showRangeChart() {
+    var key = chartSpotKey();
+    var row = (key && GTO && GTO.spots[key]) ? GTO.spots[key] : null;
+    var mine = myHoleKey();
+    var html = '<h3>起手牌范围 · ' + chartSpotName(key) + '</h3>';
+    html += '<div class="note">越亮 = 越该加注（亮绿是 100% 加注，暗绿是混合频率）；黑 = 弃牌。' +
+            '上三角是同花，下三角非同花，对角线是对子。白框是你现在这手。</div>';
+    html += '<div class="rc-big">';
+    html += '<div class="rc-row"><span class="rc-rk"></span>';
+    for (var t2 = 0; t2 < 13; t2++) html += '<span class="rc-rk">' + CHART_RANKS[t2] + '</span>';
+    html += '</div>';
+    for (var i = 0; i < 13; i++) {
+      html += '<div class="rc-row"><span class="rc-rk" style="width:14px">' + CHART_RANKS[i] + '</span>';
+      for (var j = 0; j < 13; j++) {
+        var k = chartKey(i, j);
+        var idx = GTO_IDX[k];
+        var f = (row && idx !== undefined) ? parseGtoCode(row[idx]) : null;
+        var enter = f ? (f.r + f.c + f.a) : 0;
+        var cls = 'rc-cell' + (k === mine ? ' mine' : '') + (enter < 0.005 ? ' dim' : '');
+        html += '<div class="' + cls + '" style="background:' + chartColor(f) + '">' + k + '</div>';
+      }
+      html += '</div>';
+    }
+    html += '</div>';
+    html += '<div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">关闭</button></div>';
+    openModal(html);
+    var b = $('modalClose');
+    if (b) b.onclick = closeModal;
+  }
+
   function render() {
     var me = game.players[0];
 
@@ -2749,6 +2881,7 @@ window.GTO_TABLE = {
         pd.style.display = 'none';
       }
     }
+    renderRangeChart();
     $('handTip').textContent = (!game.handOver && game.street === 'preflop')
       ? (handAdvice() || '—')
       : '翻牌后看公共牌与底池赔率，不再套起手牌表。';
@@ -5609,6 +5742,7 @@ window.GTO_TABLE = {
     b.textContent = Sound.get().musicOn ? '🔊 声音' : '🔇 静音';
   }
   $('btnChallenge').onclick = function () { showChallenge(); };
+  $('btnRangeChart').onclick = function () { showRangeChart(); };
 
   $('btnSound').onclick = function () {
     Sound.unlock();
@@ -5822,6 +5956,7 @@ window.GTO_TABLE = {
 
   // 调试：?settings=1 直接打开设置弹层（截图与自查用）
   if (/[?&]settings=1/.test(location.search)) setTimeout(showSettings, 300);
+  if (/[?&]chart=1/.test(location.search)) setTimeout(showRangeChart, 500);
   var _chDbg = String(location.search || '').match(/[?&]challenge=(1|survival|sprint|double)/);
   if (_chDbg) setTimeout(function () { _chDbg[1] === '1' ? showChallenge() : startChallenge(_chDbg[1]); }, 300);
 })();
