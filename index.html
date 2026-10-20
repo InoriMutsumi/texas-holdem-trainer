@@ -3445,6 +3445,14 @@ window.GTO_TABLE = {
   // 单加注防守表：真实语义是 <开牌桶>-vs-<hero>，映射来自
   // github.com/matthiola0/poker-hand-review 的 tools/import_mtt_preflop_charts.py
   var VS_RFI = {
+    // 前位面对开池：表里没有专门的行，用「EP vs EP」这张最紧的对付。
+    // 之前这里缺映射，直接掉进牌力兜底（sc>0.50 才跟），9 人桌实测这些位置弃到 93~99%，
+    // 每手只剩 1 个人看翻牌，整桌冷得像自习室。
+    'UTG': { 'UTG': 'EP-vs-MP', 'UTG1': 'EP-vs-MP' },
+    'UTG1':{ 'UTG': 'EP-vs-MP', 'UTG1': 'EP-vs-MP' },
+    'MP':  { 'UTG': 'EP-vs-MP', 'UTG1': 'EP-vs-MP', 'MP': 'EP-vs-MP' },
+    'MP+1':{ 'UTG': 'EP-vs-MP', 'UTG1': 'EP-vs-MP', 'MP': 'EP-vs-MP' },
+    'HJ':  { 'UTG': 'EP-vs-MP', 'UTG1': 'EP-vs-MP', 'MP': 'EP-vs-MP', 'MP+1': 'EP-vs-MP' },
     'CO':  { 'MP': 'EP-vs-MP', 'UTG': 'EP-vs-MP', 'UTG1': 'EP-vs-MP' },
     'BTN': { 'MP': 'EP-vs-BTN', 'UTG': 'EP-vs-BTN', 'UTG1': 'EP-vs-BTN', 'CO': 'MP-vs-BTN', 'HJ': 'MP-vs-BTN' },
     'SB':  { 'MP': 'EP-vs-SB', 'UTG': 'EP-vs-SB', 'UTG1': 'EP-vs-SB', 'CO': 'MP-vs-SB', 'HJ': 'MP-vs-SB', 'BTN': 'BTN-vs-SB' },
@@ -3900,7 +3908,8 @@ window.GTO_TABLE = {
           plan.raisedPre = true;
           return raiseTo(preflopRaiseAmount(g, style));
         }
-        if (plan.intent === 'giveup' && toCall > 0) return { type: 'fold' };
+        // giveup 只在翻后收紧（minEq += 0.05）；翻前不直接弃——
+        // 否则会绕过 GTO 表，把 BB 该防守的牌全扔了（实测 9 人桌每手只剩 1 人看翻牌）
         if (plan.intent === 'trap' && toCall > 0) return { type: 'call' };
       }
       // 面对 4bet 以上（含全下战）：内置表只解到 3bet，这里必须用极窄范围兜底。
