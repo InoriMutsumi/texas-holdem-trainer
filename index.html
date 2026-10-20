@@ -2848,10 +2848,20 @@ window.GTO_TABLE = {
       console.error(err);
       return;
     }
+    var me0 = game.players[0];
     if (action.type === 'call' || action.type === 'raise' || action.type === 'allin') {
-      var me = game.players[0];
-      Sound.play('chip', (action.amount || me.streetBet || 20));
+      Sound.play('chip', (action.amount || me0.streetBet || 20));
     }
+    // 玩家记忆埋点：只记公开行为
+    try {
+      if (action.type === 'fold') {
+        remember({ handId: game.handId, street: game.street, type: game.street === 'preflop' ? 'fold_pre' : (game.street === 'river' ? 'fold_river' : 'fold_other') });
+      } else if (action.type === 'raise' || action.type === 'allin') {
+        remember({ handId: game.handId, street: game.street, type: 'raise', amount: me0.streetBet });
+      } else if (action.type === 'call' && me0.streetBet >= me0.chips * 0.3) {
+        remember({ handId: game.handId, street: game.street, type: 'call_big', amount: me0.streetBet });
+      }
+    } catch (e) {}
     render();
     if (game.handOver) onHandEnd();
     else scheduleAI();
@@ -3047,6 +3057,36 @@ window.GTO_TABLE = {
   // 每手只掷一次意图，整手按意图走。目的不是变强，是让行为「有故事」：
   // 诈唬就一路诈到底（河牌没成就跑），慢打就憋到河牌突然发难。
   // 新手档不开——新手要「看起来傻」，有计划反而露馅。
+  // ---------------- 玩家记忆（只记公开行为，禁止读底牌） ----------------
+  var PLAYER_MEM = [];
+  function remember(ev) {
+    if (!ev) return;
+    PLAYER_MEM.push({ handId: ev.handId, street: ev.street, type: ev.type, amount: ev.amount || 0 });
+    if (PLAYER_MEM.length > 30) PLAYER_MEM.shift();
+  }
+  function memStat(type, hands) {
+    if (!PLAYER_MEM.length) return 0;
+    var last = PLAYER_MEM[PLAYER_MEM.length - 1].handId;
+    var since = hands ? last - hands : -1;
+    var n = 0;
+    for (var i = 0; i < PLAYER_MEM.length; i++) {
+      if (PLAYER_MEM[i].type === type && PLAYER_MEM[i].handId > since) n++;
+    }
+    return n;
+  }
+  function memLine() {
+    if (memStat('fold_pre', 3) >= 3 && Math.random() < 0.55) return '又弃？你这椅子是不是太硬了';
+    if (memStat('fold_river', 5) >= 3 && Math.random() < 0.55) return '你河牌跑得有点快啊';
+    if (memStat('raise', 3) >= 2 && Math.random() < 0.55) return '今天手气不错嘛';
+    return null;
+  }
+  function memAdjust() {
+    var out = { bluffMul: 1, minEqAdd: 0 };
+    if (memStat('fold_river', 6) >= 3) out.bluffMul = 1.35;
+    if (memStat('show_weak', 10) >= 4) out.minEqAdd = -0.05;
+    return out;
+  }
+
   var AI_PLAN = {};
 
   function planPos(g, seat) {
@@ -3251,6 +3291,13 @@ window.GTO_TABLE = {
     var f = m.foldedToBet / m.facedBet;
     var rf = m.riverFaced >= 4 ? m.riverFolded / m.riverFaced : f;
     var out = { bluff: 1, value: 1, foldRate: f, riverFold: rf, n: m.facedBet, note: '', cheatLine: '', cheatStreet: null };
+
+    // 玩家记忆：最近 6 手里河牌弃牌 ≥3 次 → 河牌多开火；摊牌偏弱 → 跟注门槛降低
+    if (game && game.aiLevel === 'hard') {
+      var adj = memAdjust();
+      out.bluff *= adj.bluffMul;
+      out.memEqAdd = adj.minEqAdd;
+    }
 
     // ① 总弃牌率：你爱弃牌就多诈唬，你不弃就少诈唬多收价值
     if (f > 0.55) { out.bluff *= 1.70; out.note = 'foldy'; }
@@ -3908,6 +3955,7 @@ window.GTO_TABLE = {
     if (exploit && toCall > 0) {
       if (exploit.note === 'bluffy') minEq -= 0.055;
       else if (exploit.note === 'nuts') minEq += 0.06;
+      if (exploit.memEqAdd) minEq += exploit.memEqAdd;
     }
 
     // MDF（最小防守频率）：面对小注不能过度弃牌，否则会被无限诈唬。
@@ -4147,6 +4195,15 @@ window.GTO_TABLE = {
     Sound.play('deal');
     render();
     scheduleAI();
+    // 记忆台词：AI 开始拿你过去几手的行为说事（和普通消息共用开关）
+    try {
+      var msgOn = !game.settings || game.settings.messageEnabled !== false;
+      var ml = msgOn ? memLine() : null;
+      if (ml) {
+        var who = 1 + Math.floor(Math.random() * Math.max(1, game.players.length - 1));
+        setTimeout(function () { if (game && game.players[who]) say(who, ml, 0); }, 1300);
+      }
+    } catch (e) {}
   }
 
   var rebuySynced = 0;
@@ -4485,6 +4542,17 @@ window.GTO_TABLE = {
     if (r && r.winners) r.winners.forEach(function (w) { if (w.playerId === 0) won += w.amount; });
     if (won > 0) { Sound.play('win'); celebrateBigWin(won); }
     else if (!me.folded) { Sound.play('lose'); if (r && r.badBeat) showBadBeat(); }
+    // 玩家记忆埋点：摊牌时记下你的牌型强弱（公开信息）
+    try {
+      if (r && r.showdown && !me.folded && me.hole.length === 2) {
+        var myEval = E.eval7(me.hole.concat(game.board));
+        remember({
+          handId: game.handId,
+          street: 'showdown',
+          type: myEval[0] >= 2 ? 'show_strong' : 'show_weak'
+        });
+      }
+    } catch (e) {}
     var html = '<h3>本手结算</h3>';
     html += '<div class="row"><span>公共牌</span><span>' +
       (game.board.length ? game.board.map(E.cardStr).join(' ') : '（未发）') + '</span></div>';
