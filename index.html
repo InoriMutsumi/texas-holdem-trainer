@@ -2316,7 +2316,8 @@ window.GTO_TABLE = {
       if (!V.on || !text) return;
       if (!('speechSynthesis' in window)) return;
       try {
-        window.speechSynthesis.cancel();
+        if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+        if (window.speechSynthesis.paused) window.speechSynthesis.resume();
         var u = new SpeechSynthesisUtterance(String(text).replace(/^[^一-龥A-Za-z0-9]+/, ''));
         var v = zhVoice();
         if (v) u.voice = v;
@@ -2356,13 +2357,14 @@ window.GTO_TABLE = {
             var ne = $('voiceNote');
             if (ne) ne.textContent = head + '｜播放出错：' + (ev && ev.error ? ev.error : '未知');
           };
-          // Chrome/Edge 里 cancel 完立刻 speak 常常不响，隔一帧再说话
-          setTimeout(function () {
-            try { window.speechSynthesis.speak(u); } catch (e) {
-              var ne = $('voiceNote');
-              if (ne) ne.textContent = head + '｜speak 失败：' + e.message;
-            }
-          }, 120);
+          // 立刻说。延迟会丢掉「用户点击」这个手势上下文，反而更容易被拦。
+          try {
+            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
+            window.speechSynthesis.speak(u);
+          } catch (e) {
+            var ne0 = $('voiceNote');
+            if (ne0) ne0.textContent = head + '｜speak 失败：' + e.message;
+          }
           setTimeout(function () {
             if (!done && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
               var ne = $('voiceNote');
