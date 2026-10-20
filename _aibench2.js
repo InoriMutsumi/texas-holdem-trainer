@@ -125,6 +125,9 @@ const stats = newStats(N);
 const t0 = Date.now();
 for (let i = 0; i < HANDS; i++) {
   const g = E.createGame({ mode: MODE, startingChips: 2000, smallBlind: 10, bigBlind: 20, aiLevel: LEVEL });
+  // HUMAN=1：把 0 号位标成「人类」，其余 AI 会对它放宽跟注线（抓诈唬）。
+  // 0 号位本身还是 AI 逻辑，所以这只能粗略模拟「AI 遇到人类」。
+  if (process.env.HUMAN === '1') g.humanSeat = 0;
   g.buttonSeat = (i % N + N) % N;
   // 关掉随机性格：这里要测的是「纯 GTO 均衡打法像不像高手」，
   // 带上松凶/跟注站/疯子之后 VPIP 会被性格乘数拉高，测的就不是 GTO 了

@@ -1127,6 +1127,9 @@ window.GTO_TABLE = {
     }
     return {
       mode: mode,
+      // 人类座位：UI 里是 0，纯 AI 对局（bench）不传 → null。
+      // 只用来决定「要不要抓诈唬」——AI 互打时保持紧，对人才放宽。
+      humanSeat: opts.humanSeat === undefined ? null : opts.humanSeat,
       players: players,
       smallBlind: opts.smallBlind || 10,
       bigBlind: bb,
@@ -1842,6 +1845,7 @@ window.GTO_TABLE = {
       bigBlind: s.blinds.bb,
       buyIn: s.blinds.bb * 100,
       aiLevel: s.aiLevel,
+      humanSeat: 0,
       seed: (Date.now() % 2147483647)
     });
     game.handsPlayed = s.hands || 0;
@@ -3208,6 +3212,14 @@ window.GTO_TABLE = {
     // 一对则相反，被压制时跟注要更小心
     if (hclass === 'draw') minEq -= 0.035;
     else if (hclass === 'medium') minEq += 0.01;
+
+    // 抓诈唬：只对真人开放。真人会诈唬、会过度跟注，所以跟注线该降一点；
+    // AI 互打时保持紧——bench 数据证明「尊重对方的下注」赢得多（WTSD 低是代价，
+    // 但真实 GTO 对 GTO 的摊牌率本来就比人类对局低）。
+    if (toCall > 0 && g.humanSeat !== null && g.humanSeat !== seat) {
+      minEq -= 0.045;
+      if (hclass === 'medium') minEq -= 0.02;   // 一对抓诈唬最划算
+    }
 
     if (cfg.scare && toCall > g.pot * 0.30 && eq < cfg.scare) return { type: 'fold' };
     if (toCall > 0 && eq < minEq) {
