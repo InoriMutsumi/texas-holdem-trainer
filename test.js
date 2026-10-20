@@ -538,6 +538,73 @@ section('29 下注金额不能为负');
   ok(threw, '负的下注额会抛错');
 }
 
+// ---------- 30 发牌风格 ----------
+console.log('');
+console.log('== 30 发牌风格 ==');
+(function () {
+  function dramaOf(g) {
+    var sim = g.deck.slice();
+    if (sim.length < 8) return 0;
+    var board = [];
+    sim.pop();
+    for (var i = 0; i < 3; i++) board.push(sim.pop());
+    sim.pop(); board.push(sim.pop());
+    sim.pop(); board.push(sim.pop());
+    var best = 0;
+    g.players.forEach(function (pl) {
+      if (!pl.hole || pl.hole.length < 2) return;
+      var r = E.eval7(pl.hole.concat(board));
+      if (r[0] > best) best = r[0];
+    });
+    return best;
+  }
+  function chen(hole) {
+    var a = Math.max(hole[0].r, hole[1].r);
+    var b = Math.min(hole[0].r, hole[1].r);
+    var suited = hole[0].s === hole[1].s;
+    var hi = { 14: 10, 13: 8, 12: 7, 11: 6, 10: 5 }[a] || (a / 2);
+    var sc = hi;
+    if (a === b) sc = Math.max(5, hi * 2);
+    if (suited) sc += 2;
+    var gap = a - b;
+    if (a !== b) {
+      if (gap === 1) sc += 1;
+      else if (gap === 2) sc -= 1;
+      else if (gap === 3) sc -= 2;
+      else if (gap === 4) sc -= 4;
+      else sc -= 5;
+    }
+    if (sc < 0 && gap <= 4) sc = 0;
+    return Math.max(0, Math.min(1, (sc + 1) / 21));
+  }
+  var N = 80;
+  function scan(style, idle) {
+    var twos = 0, threes = 0, tries = 0, strong = 0;
+    for (var i = 0; i < N; i++) {
+      var g = E.createGame({ mode: 'six', dealStyle: style, seed: 7000 + i, humanSeat: 0 });
+      g.idleHands = idle || 0;
+      E.startHand(g);
+      var d = dramaOf(g);
+      if (d >= 2) twos++;
+      if (d >= 3) threes++;
+      tries += g.dealTries || 0;
+      if (chen(g.players[0].hole) >= 0.55) strong++;
+    }
+    return { twos: twos / N, threes: threes / N, tries: tries / N, strong: strong / N };
+  }
+  var real = scan('real');
+  var fun = scan('fun');
+  var wild = scan('wild');
+  var funIdle = scan('fun', 3);
+
+  ok(real.tries === 0, '真实档从不重洗');
+  ok(fun.tries > 0, '热闹档会重洗', '平均 ' + fun.tries.toFixed(2) + ' 次');
+  ok(fun.twos > real.twos, '热闹档两对以上更多', (fun.twos * 100).toFixed(0) + '% vs ' + (real.twos * 100).toFixed(0) + '%');
+  ok(wild.threes > fun.threes, '炸裂档三条以上更多', (wild.threes * 100).toFixed(0) + '% vs ' + (fun.threes * 100).toFixed(0) + '%');
+  ok(funIdle.strong > fun.strong * 1.5, '连弃 3 手后热闹档底牌明显变强', (funIdle.strong * 100).toFixed(0) + '% vs ' + (fun.strong * 100).toFixed(0) + '%');
+  ok(fun.tries <= 3 && wild.tries <= 5, '重洗次数有上限');
+})();
+
 // ---------- 汇总 ----------
 console.log('\n========================================');
 console.log('通过 ' + pass + '，失败 ' + fail);

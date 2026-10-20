@@ -1381,6 +1381,10 @@ window.GTO_TABLE = {
       handId: 0,
       buttonSeat: 0,
       seed: opts.seed || (Date.now() % 2147483647),
+      // 发牌风格：real（真实概率）/ fun（热闹）/ wild（炸裂）
+      dealStyle: opts.dealStyle === 'fun' || opts.dealStyle === 'wild' ? opts.dealStyle : 'real',
+      idleHands: 0,
+      dealTries: 0,
       deck: [], deckState: [], board: [],
       street: 'idle',
       pot: 0,
@@ -1431,6 +1435,51 @@ window.GTO_TABLE = {
       if (!p.folded && !p.allIn) return s;
     }
     return -1;
+  }
+
+  // ---------------- 发牌风格（戏剧性筛选） ----------------
+  // Chen 公式，归一化到 0..1。与 UI 里的 preflopScore 保持同一套算法。
+  function chenScore(hi, lo, suited) {
+    var highScore = { 14: 10, 13: 8, 12: 7, 11: 6, 10: 5 }[hi] || (hi / 2);
+    var score = highScore;
+    if (hi === lo) score = Math.max(5, highScore * 2);
+    if (suited) score += 2;
+    var gap = hi - lo;
+    if (hi !== lo) {
+      if (gap === 1) score += 1;
+      else if (gap === 2) score -= 1;
+      else if (gap === 3) score -= 2;
+      else if (gap === 4) score -= 4;
+      else score -= 5;
+    }
+    if (score < 0 && gap <= 4) score = 0;
+    return Math.max(0, Math.min(1, (score + 1) / 21));
+  }
+
+  function holeStrength(hole) {
+    if (!hole || hole.length < 2) return 0;
+    var a = Math.max(hole[0].r, hole[1].r);
+    var b = Math.min(hole[0].r, hole[1].r);
+    return chenScore(a, b, hole[0].s === hole[1].s);
+  }
+
+  // 用牌堆副本预演到底，返回全桌最终能达到的最高牌型类别（0..8）
+  function dramaOf(g) {
+    var sim = g.deck.slice();
+    if (sim.length < 8) return 0;
+    var board = [];
+    sim.pop();                                  // 烧牌
+    for (var i = 0; i < 3; i++) board.push(sim.pop());
+    sim.pop(); board.push(sim.pop());           // 烧 + 转牌
+    sim.pop(); board.push(sim.pop());           // 烧 + 河牌
+    var best = 0;
+    for (var p = 0; p < g.players.length; p++) {
+      var pl = g.players[p];
+      if (!pl.hole || pl.hole.length < 2) continue;
+      var r = eval7(pl.hole.concat(board));
+      if (r[0] > best) best = r[0];
+    }
+    return best;
   }
 
   // ---------------- 发牌 ----------------
@@ -1488,21 +1537,39 @@ window.GTO_TABLE = {
       p.emotion = 'idle';
     });
 
-    // 洗牌
-    var rng = mulberry32((g.seed + g.handId * 7919) >>> 0);
-    g.deck = shuffle(makeDeck(), rng);
-
-    // 发底牌：从 SB 起，两轮各一张
-    var n = g.players.length;
-    var first = sbSeat(g);
-    for (var round = 0; round < 2; round++) {
-      for (var i = 0; i < n; i++) {
-        var seat = (first + i) % n;
-        var c = draw(g);
-        g.players[seat].hole.push({ r: c.r, s: c.s });
-        g.deckState.push({ r: c.r, s: c.s, hole: true });
-      }
+    // 洗牌 + 发底牌（发牌风格筛选）
+    var style = g.dealStyle || 'real';
+    var want = style === 'wild' ? 3 : (style === 'fun' ? 2 : 0);
+    var maxTries = style === 'wild' ? 5 : (style === 'fun' ? 3 : 0);
+    var needMine = 0;
+    if (style !== 'real') {
+      var idleNeed = style === 'wild' ? 2 : 3;
+      if ((g.idleHands || 0) >= idleNeed) needMine = style === 'wild' ? 0.60 : 0.55;
     }
+    var tries = 0;
+    while (true) {
+      g.deckState = [];
+      g.deck = shuffle(makeDeck(), mulberry32((g.seed + g.handId * 7919 + tries * 104729) >>> 0));
+      g.players.forEach(function (p) { p.hole = []; });
+      // 发底牌：从 SB 起，两轮各一张
+      var n0 = g.players.length;
+      var first0 = sbSeat(g);
+      for (var round0 = 0; round0 < 2; round0++) {
+        for (var i0 = 0; i0 < n0; i0++) {
+          var seat0 = (first0 + i0) % n0;
+          var c0 = draw(g);
+          g.players[seat0].hole.push({ r: c0.r, s: c0.s });
+          g.deckState.push({ r: c0.r, s: c0.s, hole: true });
+        }
+      }
+      if (style === 'real' || tries >= maxTries) break;
+      var dramaOk = dramaOf(g) >= want;
+      var mineOk = !needMine || holeStrength(g.players[0].hole) >= needMine;
+      if (dramaOk && mineOk) break;
+      tries++;
+    }
+    g.dealTries = tries;
+    var n = g.players.length;
 
     // 盲注
     var sbP = g.players[sbSeat(g)];
@@ -1696,6 +1763,12 @@ window.GTO_TABLE = {
     };
     g.actions.push(rec);
     logAction(g, p, type, pay);
+
+    // 玩家连续弃牌计数（发牌风格用）
+    if (g.humanSeat !== null && g.humanSeat === seat) {
+      if (type === 'fold' && g.street === 'preflop') g.idleHands = (g.idleHands || 0) + 1;
+      else if (type !== 'fold') g.idleHands = 0;
+    }
 
     // 推进
     maybeAdvance(g);
@@ -2279,7 +2352,7 @@ window.GTO_TABLE = {
       return {
         chips: 2000, hands: 0, rebuys: 0, table: 'six', aiLevel: 'normal',
         messageEnabled: true, myAvatarKey: null, theme: 'green',
-        blinds: { sb: 10, bb: 20 }
+        dealStyle: 'real', blinds: { sb: 10, bb: 20 }
       };
     }
     var set = s.settings || {};
@@ -2293,6 +2366,7 @@ window.GTO_TABLE = {
       myAvatarKey: set.myAvatarKey || null,
       myEmoji: set.myEmoji || '🐋',
       theme: set.theme || 'green',
+      dealStyle: (set.dealStyle === 'fun' || set.dealStyle === 'wild') ? set.dealStyle : 'real',
       blinds: (set.blinds && set.blinds.sb > 0 && set.blinds.bb >= set.blinds.sb)
         ? { sb: set.blinds.sb, bb: set.blinds.bb }
         : { sb: 10, bb: 20 }
@@ -2319,6 +2393,7 @@ window.GTO_TABLE = {
     if (s.myEmoji) old.settings.myEmoji = s.myEmoji;
     if (s.blinds) old.settings.blinds = s.blinds;
     if (s.theme) old.settings.theme = s.theme;
+    if (s.dealStyle) old.settings.dealStyle = s.dealStyle;
     if (!old.stats) old.stats = { vpip: 0, pfr: 0, won: 0, ev: 0 };
     LS.set('poker.save.v2', old);
   }
@@ -2338,6 +2413,8 @@ window.GTO_TABLE = {
     applyTheme(s.theme);
     var tm = String(location.search || '').match(/[?&]theme=(green|blue|wood)/);
     if (tm) applyTheme(tm[1]);
+    var dm = String(location.search || '').match(/[?&]deal=(real|fun|wild)/);
+    if (dm) s.dealStyle = dm[1];
     var forced = urlTable();
     if (forced) s.table = forced;
     messages = [];
@@ -5295,6 +5372,15 @@ window.GTO_TABLE = {
       '<button class="theme-btn" data-theme="green">绿毯</button>' +
       '<button class="theme-btn" data-theme="blue">蓝调</button>' +
       '<button class="theme-btn" data-theme="wood">木桌</button></span></div>';
+    html += '<div class="row"><span>发牌风格</span><span class="theme-pick" id="dealPick">' +
+      '<button class="theme-btn" data-deal="real">真实</button>' +
+      '<button class="theme-btn" data-deal="fun">热闹</button>' +
+      '<button class="theme-btn" data-deal="wild">炸裂</button></span></div>';
+    html += '<div class="note ai-guide">' +
+      '<b>真实</b>——按真实概率发牌。德州扑克本来就大半是垃圾牌，连弃十手很正常，想学真东西用这个。<br>' +
+      '<b>热闹</b>——每手至少有人能成两对以上（最多重洗 3 次）；连续弃 3 手后下一手保底给你能玩的底牌。牌更热闹，输赢仍然公平。<br>' +
+      '<b>炸裂</b>——每手至少三条以上（最多重洗 5 次）；连弃 2 手就保底。每把都有戏，但教学价值最低。' +
+      '</div>';
     var au = Sound.get();
     html += '<div class="row"><span>背景音乐</span><span>' +
       '<input type="checkbox" id="setMusic"' + (au.musicOn ? ' checked' : '') + '></span></div>';
@@ -5319,6 +5405,16 @@ window.GTO_TABLE = {
       '<button class="btn check" id="btnSaveSet">保存并重开</button></div>';
     openModal(html);
     $('setAi').value = s.aiLevel || 'normal';
+    var curDeal = s.dealStyle || 'real';
+    var dbs = document.querySelectorAll('#dealPick .theme-btn');
+    for (var di = 0; di < dbs.length; di++) {
+      if (dbs[di].getAttribute('data-deal') === curDeal) dbs[di].classList.add('on');
+      dbs[di].onclick = function () {
+        var b0 = document.querySelectorAll('#dealPick .theme-btn');
+        for (var k = 0; k < b0.length; k++) b0[k].classList.remove('on');
+        this.classList.add('on');
+      };
+    }
     var curTheme = document.body.getAttribute('data-theme') || 'green';
     Array.prototype.forEach.call(document.querySelectorAll('.theme-btn'), function (b) {
       b.classList.toggle('on', b.getAttribute('data-theme') === curTheme);
@@ -5347,6 +5443,8 @@ window.GTO_TABLE = {
       st.aiLevel = $('setAi').value;
       st.messageEnabled = $('setMsg').checked;
       st.theme = document.body.getAttribute('data-theme') || 'green';
+      var picked = document.querySelector('#dealPick .theme-btn.on');
+      st.dealStyle = picked ? picked.getAttribute('data-deal') : (st.dealStyle || 'real');
       saveSettings(st);
       if (game) {
         game.aiLevel = st.aiLevel;
