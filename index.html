@@ -2340,21 +2340,41 @@ window.GTO_TABLE = {
         var vs = [];
         try { vs = window.speechSynthesis.getVoices() || []; } catch (e) {}
         var zh = zhVoice();
-        if (!zh) {
-          return '系统里没找到中文音色（一共 ' + vs.length + ' 个）。Windows 可以在「设置 → 时间和语言 → 语音」里装一个中文语音包，装完刷新页面。';
-        }
+        var head = '音色 ' + vs.length + ' 个，' + (zh ? '中文用「' + zh.name + '」' : '没找到中文音色');
+        // 把真实结果挂到 window 上，方便用户按 F12 看，也让下面能同步显示
+        window.__voiceDiag = { voices: vs.length, zh: zh ? zh.name : null, ready: V.ready, state: window.speechSynthesis.speaking };
         try {
           window.speechSynthesis.cancel();
           var u = new SpeechSynthesisUtterance('这手牌我加注，你跟不跟？');
-          u.voice = zh;
-          u.lang = zh.lang;
+          if (zh) u.voice = zh;
+          u.lang = zh ? zh.lang : 'zh-CN';
           u.rate = V.rate;
           u.volume = 1;
-          window.speechSynthesis.speak(u);
+          var done = false;
+          u.onend = function () { done = true; };
+          u.onerror = function (ev) {
+            var ne = $('voiceNote');
+            if (ne) ne.textContent = head + '｜播放出错：' + (ev && ev.error ? ev.error : '未知');
+          };
+          // Chrome/Edge 里 cancel 完立刻 speak 常常不响，隔一帧再说话
+          setTimeout(function () {
+            try { window.speechSynthesis.speak(u); } catch (e) {
+              var ne = $('voiceNote');
+              if (ne) ne.textContent = head + '｜speak 失败：' + e.message;
+            }
+          }, 120);
+          setTimeout(function () {
+            if (!done && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+              var ne = $('voiceNote');
+              if (ne && ne.textContent.indexOf('播放出错') < 0) {
+                ne.textContent = head + '｜200ms 后仍然没开始说话，可能是浏览器把语音拦了（换 Chrome 试试，或检查系统音量）。';
+              }
+            }
+          }, 900);
         } catch (e) {
           return '调用失败：' + (e && e.message);
         }
-        return '正在用「' + zh.name + '」念。听到了吗？听不到多半是系统音量或浏览器静音。';
+        return head + '｜正在念，听到了吗？';
       }
     };
   })();
