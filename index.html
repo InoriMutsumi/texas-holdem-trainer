@@ -2319,10 +2319,9 @@ window.GTO_TABLE = {
         if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
         if (window.speechSynthesis.paused) window.speechSynthesis.resume();
         var u = new SpeechSynthesisUtterance(String(text).replace(/^[^一-龥A-Za-z0-9]+/, ''));
-        var v = zhVoice();
-        if (v) u.voice = v;
-        // 找不到具体音色也让浏览器按 lang 自己挑，不要直接不念
-        u.lang = v ? v.lang : 'zh-CN';
+        // 别硬绑 voice 对象：Edge 里绑定旧对象会静默失败（speaking=true 但没声音），
+        // 交给浏览器按 lang 自己挑，各版本都更稳。
+        u.lang = 'zh-CN';
         u.rate = V.rate;
         u.pitch = pitch || 1;
         u.volume = 0.9;
@@ -2345,34 +2344,40 @@ window.GTO_TABLE = {
         // 把真实结果挂到 window 上，方便用户按 F12 看，也让下面能同步显示
         window.__voiceDiag = { voices: vs.length, zh: zh ? zh.name : null, ready: V.ready, state: window.speechSynthesis.speaking };
         try {
-          window.speechSynthesis.cancel();
+          // 只在真在说话时才 cancel：cancel 之后立刻 speak 在 Edge 上会被吞掉，
+          // 表现就是「引擎接受了、speaking=true、但一点声音都没有」。
+          if (window.speechSynthesis.speaking) window.speechSynthesis.cancel();
+          if (window.speechSynthesis.paused) window.speechSynthesis.resume();
           var u = new SpeechSynthesisUtterance('这手牌我加注，你跟不跟？');
-          if (zh) u.voice = zh;
-          u.lang = zh ? zh.lang : 'zh-CN';
+          // 不硬绑 voice 对象：Edge 里绑定旧对象会静默失败，交给浏览器按 lang 自己挑更稳。
+          u.lang = 'zh-CN';
           u.rate = V.rate;
           u.volume = 1;
-          var done = false;
-          u.onend = function () { done = true; };
+          var started = false, ended = false;
+          u.onstart = function () {
+            started = true;
+            var ne = $('voiceNote');
+            if (ne) ne.textContent = head + '｜引擎已开始播放（onstart 触发）。还听不到就是系统输出设备的问题。';
+          };
+          u.onend = function () { ended = true; };
           u.onerror = function (ev) {
             var ne = $('voiceNote');
             if (ne) ne.textContent = head + '｜播放出错：' + (ev && ev.error ? ev.error : '未知');
           };
-          // 立刻说。延迟会丢掉「用户点击」这个手势上下文，反而更容易被拦。
           try {
-            if (window.speechSynthesis.paused) window.speechSynthesis.resume();
             window.speechSynthesis.speak(u);
           } catch (e) {
             var ne0 = $('voiceNote');
             if (ne0) ne0.textContent = head + '｜speak 失败：' + e.message;
           }
           setTimeout(function () {
-            if (!done && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+            if (!started && !ended) {
               var ne = $('voiceNote');
               if (ne && ne.textContent.indexOf('播放出错') < 0) {
-                ne.textContent = head + '｜200ms 后仍然没开始说话，可能是浏览器把语音拦了（换 Chrome 试试，或检查系统音量）。';
+                ne.textContent = head + '｜1.4 秒内 onstart 没触发——edg 的语音通道被吞了（这个我们绕不过去，换 Chrome）。';
               }
             }
-          }, 900);
+          }, 1400);
         } catch (e) {
           return '调用失败：' + (e && e.message);
         }
