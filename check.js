@@ -105,7 +105,7 @@ try {
 
 // 可选：用 6 人桌 / 9 人桌模式跑冒烟（node check.js six / node check.js nine）
 const argMode = process.argv[2];
-const tableMode = (argMode === 'six' || argMode === 'nine') ? argMode : 'hu';
+const tableMode = (argMode === 'nine') ? 'nine' : 'six';
 if (tableMode !== 'hu') {
   storage['poker.save.v2'] = JSON.stringify({
     schemaVersion: 2, chips: 2000, hands: 0, rebuys: 0,

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>德州扑克 · 单挑练习</title>
+<title>德州扑克 · 练习器</title>
 <style>
   /* ================= 主题变量 ================= */
   :root {
@@ -695,10 +695,9 @@
 <body>
 <div class="app">
   <header class="topbar">
-    <span class="brand" id="brand">🐋 <span class="brand-text">德州扑克 · 单挑练习</span></span>
+    <span class="brand" id="brand">🐋 <span class="brand-text">德州扑克 · 6 人桌</span></span>
     <div class="seg" id="modeSeg">
-      <button data-mode="hu" class="on">单挑</button>
-      <button data-mode="six">6 人桌</button>
+      <button data-mode="six" class="on">6 人桌</button>
       <button data-mode="nine">9 人桌</button>
     </div>
     <span class="stat">盲注 <b id="topBlinds">10 / 20</b></span>
@@ -1319,7 +1318,7 @@ window.GTO_TABLE = {
   // ---------------- 建局 ----------------
   function createGame(opts) {
     opts = opts || {};
-    var mode = opts.mode === 'six' ? 'six' : (opts.mode === 'nine' ? 'nine' : 'hu');
+    var mode = opts.mode === 'nine' ? 'nine' : (opts.mode === 'hu' ? 'hu' : 'six');
     var n = mode === 'hu' ? 2 : (mode === 'nine' ? 9 : 6);
     var names = {
       hu: [opts.playerName || '你', opts.aiName || 'AI·小白'],
@@ -1604,7 +1603,7 @@ window.GTO_TABLE = {
         target = p.streetBet + p.chips;
       }
       pay = Math.min(target - p.streetBet, p.chips);
-      if (pay < 0) pay = 0;
+      if (pay < 0) throw new Error('下注金额不能为负：' + pay);
     } else {
       throw new Error('未知动作 ' + type);
     }
@@ -2174,7 +2173,7 @@ window.GTO_TABLE = {
     var s = LS.get('poker.save.v2', null);
     if (!s || typeof s !== 'object') {
       return {
-        chips: 2000, hands: 0, rebuys: 0, table: 'hu', aiLevel: 'normal',
+        chips: 2000, hands: 0, rebuys: 0, table: 'six', aiLevel: 'normal',
         messageEnabled: true, myAvatarKey: null, theme: 'green',
         blinds: { sb: 10, bb: 20 }
       };
@@ -2184,7 +2183,7 @@ window.GTO_TABLE = {
       chips: typeof s.chips === 'number' ? s.chips : 2000,
       hands: typeof s.hands === 'number' ? s.hands : 0,
       rebuys: typeof s.rebuys === 'number' ? s.rebuys : 0,
-      table: set.table === 'nine' ? 'nine' : (set.table === 'six' ? 'six' : 'hu'),
+      table: set.table === 'nine' ? 'nine' : 'six',
       aiLevel: set.aiLevel || 'normal',
       messageEnabled: set.messageEnabled !== false,
       myAvatarKey: set.myAvatarKey || null,
@@ -2204,7 +2203,7 @@ window.GTO_TABLE = {
     old.rebuys = s.rebuys;
     if (!old.settings) {
       old.settings = {
-        table: 'hu', aiLevel: 'normal',
+        table: 'six', aiLevel: 'normal',
         blinds: { sb: 10, bb: 20 }, buyIn: 2000, autoRebuy: true,
         messageEnabled: true, avatars: []
       };
@@ -2257,7 +2256,7 @@ window.GTO_TABLE = {
     busy = false;
     resultShown = false;
     var brandMap = {
-      hu: '🐋 德州扑克 · 单挑练习',
+      hu: '🐋 德州扑克 · 6 人桌',
       six: '🐋 德州扑克 · 6 人桌',
       nine: '🐋 德州扑克 · 9 人桌'
     };

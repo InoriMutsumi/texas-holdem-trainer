@@ -480,6 +480,64 @@ section('27 退还未被跟注的投入');
   eq(p1.chips, 2000, '赢家拿走全部 2000');
 }
 
+// ---------- 28 平分余数按按钮左侧顺序 ----------
+section('28 平分余数按按钮左侧顺序');
+function tieGame(buttonSeat, aliveSeats) {
+  const g = E.createGame({ mode: 'six', startingChips: 2000, seed: 21 });
+  E.startHand(g);
+  g.buttonSeat = buttonSeat;
+  const C = (r, s) => ({ r, s });
+  // 公共牌是皇家同花顺，三个人最佳手牌相同 => 必然平分
+  g.board = [C(14, 's'), C(13, 's'), C(12, 's'), C(11, 's'), C(10, 's')];
+  g.players.forEach(p => { p.folded = true; p.totalBet = 0; p.chips = 0; p.allIn = false; });
+  g.players[0].totalBet = 100;   // 一个弃牌者投了 100，让池子 = 400
+  aliveSeats.forEach(function (seat, i) {
+    const p = g.players[seat];
+    p.folded = false; p.totalBet = 100; p.chips = 0; p.allIn = true;
+    p.hole = [C(2 + i * 2, 'h'), C(3 + i * 2, 'd')];
+  });
+  g.pot = 400;
+  E.settle(g);
+  return g;
+}
+{
+  // 按钮在 2 号位：左侧顺序是 3 → 4 → 5，零头给 3
+  const g = tieGame(2, [3, 4, 5]);
+  eq(g.players[3].chips, 134, '按钮左侧第一人拿零头 134');
+  eq(g.players[4].chips, 133, '第二人 133');
+  eq(g.players[5].chips, 133, '第三人 133');
+  eq(g.players[3].chips + g.players[4].chips + g.players[5].chips, 400, '三人合计 400');
+}
+{
+  // 按钮在 3 号位（自己也是平分者）：顺序变成 4 → 5 → 3，零头给 4
+  const g = tieGame(3, [3, 4, 5]);
+  eq(g.players[4].chips, 134, '按钮左侧第一人 4 拿零头');
+  eq(g.players[5].chips, 133, '第二人 5 拿 133');
+  eq(g.players[3].chips, 133, '按钮本人最后拿 133');
+}
+
+// ---------- 29 全下金额为负会抛错 ----------
+section('29 下注金额不能为负');
+{
+  const g = E.createGame({ mode: 'six', startingChips: 2000, seed: 22 });
+  E.startHand(g);
+  const seat = g.activeSeat;
+  const p = g.players[seat];
+  // 人为构造：已投 500，但当前注只有 300，此时再报一个 400 的加注
+  // target(400) > streetCurrentBet(300)，所以不会走「不足跟注」的兜底，
+  // pay = 400 - 500 = -100，必须抛错而不是静默吞掉
+  p.streetBet = 500;
+  p.totalBet = 500;
+  g.streetCurrentBet = 300;
+  let threw = false;
+  try {
+    E.act(g, seat, { type: 'raise', amount: 400 });
+  } catch (e) {
+    threw = /下注金额不能为负/.test(String(e.message));
+  }
+  ok(threw, '负的下注额会抛错');
+}
+
 // ---------- 汇总 ----------
 console.log('\n========================================');
 console.log('通过 ' + pass + '，失败 ' + fail);
