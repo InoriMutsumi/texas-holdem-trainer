@@ -3131,7 +3131,7 @@ window.GTO_TABLE = {
     // 风格改变弃牌线：跟注站 callMul 大 → 弃牌线低；紧弱 callMul 小 → 容易弃
     var minEq = cfg.noOdds
       ? (0.34 + (nOpp - 1) * 0.05) / Math.max(0.5, style.callMul)
-      : (potOdds + 0.06 + (nOpp - 1) * 0.04) / Math.max(0.45, style.callMul);
+      : (potOdds + 0.04 + (nOpp - 1) * 0.03) / Math.max(0.45, style.callMul);
     if (read.tight > 0) minEq += 0.035 * Math.min(3, read.tight);      // 对面有紧手在加注，收着点
     if (read.loose > 0) minEq -= 0.02 * Math.min(3, read.loose);       // 对面全是跟注站，能便宜看牌就看
     if (myMind.tilt > 0.08) minEq *= (1 - myMind.tilt * 0.25);         // 上头了，弃不掉牌
@@ -3147,16 +3147,17 @@ window.GTO_TABLE = {
     // 河牌尤其明显——原来的实现在河牌面对大注几乎必弃，等于白送诈唬。
     if (toCall > 0 && !cfg.noOdds && !cfg.noMdf) {
       var mdf = g.pot / (g.pot + toCall);
-      if (mdf >= 0.62) minEq = Math.min(minEq, potOdds + 0.02);
-      else if (mdf >= 0.45) minEq = Math.min(minEq, potOdds + 0.05);
-      if (cfg.pro && g.street === 'river') minEq = Math.min(minEq, Math.max(potOdds + 0.02, 0.32));
+      if (mdf >= 0.62) minEq = Math.min(minEq, potOdds + 0.015);
+      else if (mdf >= 0.45) minEq = Math.min(minEq, potOdds + 0.035);
+      else if (mdf >= 0.33) minEq = Math.min(minEq, potOdds + 0.07);
+      if (cfg.pro && g.street === 'river') minEq = Math.min(minEq, Math.max(potOdds + 0.02, 0.30));
     }
 
     if (cfg.scare && toCall > g.pot * 0.30 && eq < cfg.scare) return { type: 'fold' };
     if (toCall > 0 && eq < minEq) {
       // 没牌时也可以诈唬。真人约 25-35%，但对付爱跟注的弱玩家要收敛：
       // 诈唬要成立，对手弃牌率得高过 bet/(pot+bet)，多半时候达不到。
-      var bluffChance = cfg.noGto ? 0 : ((cfg.fixedSize ? 0.05 : 0.11) * style.bluffMul * Math.max(0.2, 1 - read.loose * 0.35));
+      var bluffChance = cfg.noGto ? 0 : ((cfg.fixedSize ? 0.05 : 0.16) * style.bluffMul * Math.max(0.2, 1 - read.loose * 0.35));
       if (exploit) bluffChance *= exploit.bluff;              // 你爱弃牌 → 多诈唬
       if (cfg.elite) {
         // 阻断牌：手里有 A/K 时诈唬更划算（对手更难拿到坚果）
@@ -3201,7 +3202,7 @@ window.GTO_TABLE = {
     // 没有这一层，AI 会一路过牌到摊牌，跟真人差距最大。
     var pfList = preflopRaises(g);
     var aggressor = pfList.length > 0 && pfList[pfList.length - 1].playerId === seat;
-    var cbet = aggressor ? (nOpp <= 1 ? 0.62 : 0.38) : 0.13;
+    var cbet = aggressor ? (nOpp <= 1 ? 0.58 : 0.35) : 0.15;
     cbet *= Math.max(0.35, 1 - read.loose * 0.18);    // 跟注站不弃牌，C-bet 收益低
     if (myMind.tilt > 0.08) cbet += myMind.tilt * 0.15;
     if (cfg.elite) {

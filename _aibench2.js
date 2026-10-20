@@ -35,6 +35,17 @@ sandbox.E = E;
 vm.runInContext(posSrc, sandbox);
 vm.runInContext(aiSrc, sandbox);
 
+// FAST=1：把蒙特卡洛抽样降到 400。频率统计依赖的是决策分布，不是精确胜率，
+// 这样 600 手能从十几分钟压到两三分钟。
+// 实验开关：NORANGE=1 关掉范围追踪，用来定位 WTSD 低的根因
+if (process.env.NORANGE === '1' && sandbox.AI_PROFILE && sandbox.AI_PROFILE.hard) {
+  sandbox.AI_PROFILE.hard.noRange = true;
+}
+if (process.env.FAST === '1') {
+  sandbox.AI_PROFILE.hard.iters = 400;
+  sandbox.AI_PROFILE.normal.iters = 300;
+}
+
 const LEVEL = process.argv[2] || 'hard';
 const HANDS = Number(process.argv[3] || 300);
 const MODE = process.argv[4] || 'six';
@@ -90,6 +101,15 @@ function analyze(g, stats) {
     if (pf.has(s)) stats[s].pfr++;
     if (sawFlopSeats.has(s)) stats[s].sawFlop++;
   }
+  // 诊断：翻牌圈到底弃了多少
+  let flopActsN = 0, flopFold = 0;
+  for (const a of acts) {
+    if (a.street !== 'flop') continue;
+    flopActsN++;
+    if (a.type === 'fold') flopFold++;
+  }
+  stats.__flopActs = (stats.__flopActs || 0) + flopActsN;
+  stats.__flopFold = (stats.__flopFold || 0) + flopFold;
   if (g.result && g.result.showdown) {
     const won = new Set(g.result.winners.map(w => w.playerId));
     for (let s = 0; s < N; s++) {
