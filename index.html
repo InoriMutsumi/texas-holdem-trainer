@@ -580,6 +580,44 @@
   .guide-tip .btn-mini, .guide-bar .btn-mini { white-space: nowrap; }
 
   /* 大赢庆祝 */
+  @keyframes btnPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(212, 175, 55, .55); }
+    55% { box-shadow: 0 0 0 7px rgba(212, 175, 55, 0); }
+  }
+  #btnChallenge.pulse { animation: btnPulse 2.4s ease-in-out infinite; color: var(--gold); }
+
+  .streak-pop {
+    position: fixed; left: 50%; top: 17%; transform: translateX(-50%);
+    padding: 8px 18px; border-radius: 999px; font-size: 15px; font-weight: 700;
+    z-index: 88; pointer-events: none; animation: streakPop 2.4s ease-out forwards;
+    white-space: nowrap;
+  }
+  .streak-pop.good { background: rgba(212, 175, 55, .18); border: 1px solid var(--gold); color: var(--gold); }
+  .streak-pop.bad { background: rgba(200, 60, 60, .15); border: 1px solid var(--lose); color: #ff9a9a; }
+  @keyframes streakPop {
+    0% { opacity: 0; transform: translate(-50%, 10px) scale(.92); }
+    12% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    82% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -12px); }
+  }
+
+  .badbeat-flash {
+    position: fixed; inset: 0; pointer-events: none; z-index: 90;
+    background: radial-gradient(circle at 50% 42%, rgba(200, 36, 36, .38), rgba(120, 12, 12, .10) 55%, transparent 72%);
+    animation: bbFlash .95s ease-out forwards;
+  }
+  @keyframes bbFlash {
+    0% { opacity: 0; }
+    12% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .badbeat-note {
+    margin-top: 10px; padding: 9px 12px; border-radius: 8px;
+    background: rgba(200, 36, 36, .12); border: 1px solid rgba(220, 80, 80, .45);
+    color: #ffb4b4; font-size: 13px; line-height: 1.5;
+  }
+  .badbeat-note b { color: #ff8f8f; }
+
   .big-win {
     position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
     font-size: 64px; font-weight: 900; color: var(--gold);
@@ -1908,7 +1946,28 @@ window.GTO_TABLE = {
       });
       // 亮牌
       alive.forEach(function (p) { p.holeRevealed = true; });
-      g.result = { winners: results, pot: totalBefore, showdown: true, handNames: handNames };
+
+      // 恶意逆转（bad beat）：玩家在转牌结束时领先所有人，河牌被反超
+      var badBeat = null;
+      var meP = g.players[0];
+      if (g.board.length === 5 && meP && !meP.folded && alive.length >= 2) {
+        var iWonAnyway = results.some(function (r) { return r.playerId === 0; });
+        if (!iWonAnyway) {
+          var b4 = g.board.slice(0, 4);
+          var myV = eval7(meP.hole.concat(b4));
+          var stillAhead = true;
+          alive.forEach(function (p) {
+            if (p.id === 0) return;
+            if (cmpVal(eval7(p.hole.concat(b4)), myV) > 0) stillAhead = false;
+          });
+          if (stillAhead) {
+            var whoBeat = results.filter(function (r) { return r.playerId !== 0; });
+            badBeat = { byPlayerId: whoBeat.length ? whoBeat[0].playerId : -1 };
+          }
+        }
+      }
+
+      g.result = { winners: results, pot: totalBefore, showdown: true, handNames: handNames, badBeat: badBeat };
     }
 
     g.pot = 0;
@@ -2092,6 +2151,13 @@ window.GTO_TABLE = {
           tone(midi(n), t + i * 0.10, 0.45, 'sine', 0.085, sfxBus);
         });
       },
+      badbeat: function () {
+        var c = ensure(); if (!c || !S.sfxOn) return;
+        var t = c.currentTime;
+        tone(midi(45), t, 0.75, 'sawtooth', 0.11, sfxBus);
+        tone(midi(38), t + 0.16, 0.9, 'sine', 0.10, sfxBus);
+        noise(t + 0.02, 0.35, 0.09, sfxBus, 500);
+      },
       turn: function () {
         var c = ensure(); if (!c || !S.sfxOn) return;
         var t = c.currentTime;
@@ -2157,6 +2223,50 @@ window.GTO_TABLE = {
     };
   })();
 
+  // ---------------- 语音（浏览器自带 TTS，零音频文件） ----------------
+  var Voice = (function () {
+    var V = { on: true, rate: 1.0, ready: false };
+    function load() {
+      var v = LS.get('poker.voice.v1', null);
+      if (v) { V.on = v.on !== false; V.rate = typeof v.rate === 'number' ? v.rate : 1.0; }
+      if ('speechSynthesis' in window) {
+        try { window.speechSynthesis.getVoices(); } catch (e) {}
+        V.ready = true;
+      }
+      return V;
+    }
+    function save() { LS.set('poker.voice.v1', { on: V.on, rate: V.rate }); }
+    function zhVoice() {
+      if (!V.ready) return null;
+      var vs = [];
+      try { vs = window.speechSynthesis.getVoices() || []; } catch (e) { return null; }
+      for (var i = 0; i < vs.length; i++) if (/^zh/i.test(vs[i].lang || '')) return vs[i];
+      return null;
+    }
+    function say(text, pitch) {
+      if (!V.on || !V.ready || !text) return;
+      try {
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance(String(text).replace(/^[^一-龥A-Za-z0-9]+/, ''));
+        var v = zhVoice();
+        if (v) u.voice = v;
+        u.lang = v ? v.lang : 'zh-CN';
+        u.rate = V.rate;
+        u.pitch = pitch || 1;
+        u.volume = 0.9;
+        window.speechSynthesis.speak(u);
+      } catch (e) {}
+    }
+    return {
+      init: load, save: save, say: say,
+      isOn: function () { return V.on; },
+      setOn: function (x) { V.on = !!x; save(); },
+      getRate: function () { return V.rate; },
+      setRate: function (x) { V.rate = Math.max(0.6, Math.min(1.6, Number(x) || 1)); save(); },
+      supported: function () { return ('speechSynthesis' in window) && !!zhVoice; }
+    };
+  })();
+
 
   // ---------------- 本地存储 ----------------
   var LS = {
@@ -2168,6 +2278,9 @@ window.GTO_TABLE = {
       try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* 配额满了就算了 */ }
     }
   };
+
+  // 语音初始化放在 LS 之后（load() 要读存储）
+  try { Voice.init(); } catch (e) {}
 
   function loadSettings() {
     var s = LS.get('poker.save.v2', null);
@@ -2228,6 +2341,7 @@ window.GTO_TABLE = {
   }
 
   function newGame() {
+    streak.win = 0; streak.lose = 0;
     var s = loadSettings();
     applyTheme(s.theme);
     var tm = String(location.search || '').match(/[?&]theme=(green|blue|wood)/);
@@ -2812,7 +2926,7 @@ window.GTO_TABLE = {
   function pickOne(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
   // 说一句：占预算、延迟播放、写进本手 messages（牌谱可回看）
-  function say(seat, text, delay) {
+  function say(seat, text, delay, speak) {
     if (!aiTalkingEnabled() || !seat || seat === 0) return;
     if (_talkBudget <= 0) return;
     _talkBudget -= 1;
@@ -2820,6 +2934,7 @@ window.GTO_TABLE = {
     var d = delay || 0;
     setTimeout(function () {
       if (!game) return;
+      if (speak) { try { Voice.say(text, 0.92 + (seat % 4) * 0.06); } catch (e) {} }
       messages.push({
         id: 'msg-' + (messages.length + 1) + '-t',
         speakerId: seat,
@@ -2846,7 +2961,7 @@ window.GTO_TABLE = {
       return p.id !== 0 && p.id !== actorSeat && !p.folded;
     });
     if (!others.length) return;
-    say(pickOne(others).id, pickOne(REPLY[key]), 1200);
+    say(pickOne(others).id, pickOne(REPLY[key]), 1200, key === 'allin');
   }
 
   // 连续 3 手没人说话，25% 概率两个 AI 一来一回
@@ -2875,10 +2990,10 @@ window.GTO_TABLE = {
     var who = pickOne(others);
     var bb = (game.bigBlind || 20);
     if (meWin && (result.pot || 0) >= bb * 25) {
-      say(who.id, pickOne(SHOWDOWN_LINES), 900);
+      say(who.id, pickOne(SHOWDOWN_LINES), 900, true);
     } else if (!meWin && Math.random() < 0.25) {
       var aw = winners.filter(function (w) { return w.playerId !== 0; });
-      if (aw.length) say(aw[0].playerId, '这手归我了', 900);
+      if (aw.length) say(aw[0].playerId, '这手归我了', 900, true);
     }
   }
 
@@ -3838,6 +3953,7 @@ window.GTO_TABLE = {
     if (text === _lastCheatTalk) return;
     _lastCheatTalk = text;
     showBubble(seat, text);
+    try { Voice.say(text, 0.86); } catch (e) {}
   }
 
   var _turnSoundAt = -1;
@@ -3874,7 +3990,16 @@ window.GTO_TABLE = {
 
   // 思考时长：真人不是每次都匀速。底池大、牌力边缘会多想一会儿，明显弃牌秒弃。
   function thinkDelay(g, seat) {
-    var base = 340 + Math.random() * 300;
+    var p = g.players[seat];
+    var toCall = Math.max(0, (g.streetCurrentBet || 0) - (p ? p.streetBet : 0));
+    // 免费过牌、没什么可想的：快速过
+    if (toCall <= 0) return Math.round(170 + Math.random() * 150);
+    var base = 320 + Math.random() * 280;
+    // 面对大注 / 全下：长考
+    var stack = p ? (p.chips + (p.streetBet || 0)) : 0;
+    if (stack > 0 && toCall >= stack * 0.45) base += 400 + Math.random() * 520;
+    // 河牌最后一个决定：再慢一点
+    if (g.board && g.board.length === 5) base += 110 + Math.random() * 230;
     var potBB = (g.pot || 0) / (g.bigBlind || 20);
     if (potBB > 30) base += 320 + Math.random() * 520;
     else if (potBB > 12) base += 130 + Math.random() * 260;
@@ -3895,6 +4020,7 @@ window.GTO_TABLE = {
     saveHand();
     saveSettings({ chips: game.players[0].chips, hands: game.handsPlayed, rebuys: game.rebuys });
     try { updateProfile(); } catch (e) {}
+    try { checkStreak(); } catch (e) {}
     checkChallenge();
     showResult();
   }
@@ -4208,6 +4334,44 @@ window.GTO_TABLE = {
     setTimeout(function () { document.body.classList.remove('shake'); }, 420);
   }
 
+  var BADBEAT_LINES = ['河牌救了我', '这就是德州，兄弟', '运气也是实力的一部分', '别急，下把还你'];
+
+  var streak = { win: 0, lose: 0 };
+
+  function showStreak(text, good) {
+    var el = document.createElement('div');
+    el.className = 'streak-pop ' + (good ? 'good' : 'bad');
+    el.textContent = text;
+    document.body.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 2500);
+  }
+
+  function checkStreak() {
+    var me = game.players[0];
+    var won = 0;
+    if (game.result && game.result.winners) {
+      game.result.winners.forEach(function (w) { if (w.playerId === 0) won += w.amount; });
+    }
+    var net = won - (me.totalBet || 0);
+    if (net > 0) { streak.win++; streak.lose = 0; }
+    else if (net < 0) { streak.lose++; streak.win = 0; }
+    else { streak.win = 0; streak.lose = 0; return; }
+    if (streak.win === 2) showStreak('连赢 2 把', true);
+    else if (streak.win === 3) showStreak('连赢 3 把，手风正顺', true);
+    else if (streak.win >= 5) showStreak('连赢 ' + streak.win + ' 把', true);
+    else if (streak.lose === 3) showStreak('连输 3 把，稳住别上头', false);
+    else if (streak.lose === 5) showStreak('连输 5 把，要不要换个桌型？', false);
+    else if (streak.lose >= 8) showStreak('连输 ' + streak.lose + ' 把了', false);
+  }
+
+  function showBadBeat() {
+    Sound.play('badbeat');
+    var el = document.createElement('div');
+    el.className = 'badbeat-flash';
+    document.body.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 1000);
+  }
+
   function showResult() {
     maybeShowdownTalk(game.result);
     var me = game.players[0];
@@ -4215,7 +4379,7 @@ window.GTO_TABLE = {
     var won = 0;
     if (r && r.winners) r.winners.forEach(function (w) { if (w.playerId === 0) won += w.amount; });
     if (won > 0) { Sound.play('win'); celebrateBigWin(won); }
-    else if (!me.folded) Sound.play('lose');
+    else if (!me.folded) { Sound.play('lose'); if (r && r.badBeat) showBadBeat(); }
     var html = '<h3>本手结算</h3>';
     html += '<div class="row"><span>公共牌</span><span>' +
       (game.board.length ? game.board.map(E.cardStr).join(' ') : '（未发）') + '</span></div>';
@@ -4234,6 +4398,11 @@ window.GTO_TABLE = {
         html += '<div class="row"><span>' + nm + '</span><span class="win">+' + w.amount + '（' + (w.reason || '') + '）</span></div>';
       });
     }
+    if (r && r.badBeat) {
+      var bnm = (game.players[r.badBeat.byPlayerId] || {}).name || '对手';
+      html += '<div class="badbeat-note">河牌逆转：你在转牌时还领先 <b>' + bnm +
+        '</b>，被他最后一张反超。这种输法不算你打错，别上头。</div>';
+    }
     html += '<div class="row"><span>你的筹码</span><span>' + me.chips + '</span></div>';
 
     // 复盘讲评
@@ -4251,6 +4420,9 @@ window.GTO_TABLE = {
       html += '<div class="note">这一手你没有做决策（直接弃牌或没轮到）。</div>';
     }
 
+    if (!challenge || !challenge.active) {
+      html += '<div class="note" style="margin-top:10px">想要一个明确的目标？点顶栏 <b>🏆</b> 开挑战模式：限定手数内打到目标筹码，破产就清零重来。</div>';
+    }
     if (challenge && challenge.result) {
       html += challengeResultHtml();
     } else {
@@ -4973,6 +5145,15 @@ window.GTO_TABLE = {
       '<input type="checkbox" id="setSfx"' + (au.sfxOn ? ' checked' : '') + '></span></div>';
     html += '<div class="row"><span>音效音量</span><span>' +
       '<input type="range" id="setSfxVol" min="0" max="100" value="' + Math.round(au.sfxVol * 100) + '"></span></div>';
+    if (Voice.supported()) {
+      html += '<div class="row"><span>AI 语音</span><span>' +
+        '<input type="checkbox" id="setVoice"' + (Voice.isOn() ? ' checked' : '') + '></span></div>';
+      html += '<div class="row"><span>语音语速</span><span>' +
+        '<input type="range" id="setVoiceRate" min="0.6" max="1.6" step="0.05" value="' + Voice.getRate() + '"> <b id="setVoiceRateVal">' + Voice.getRate().toFixed(2) + 'x</b></span></div>';
+      html += '<div class="note">语音用系统自带的中文音色，念的是 AI 全下、摊牌嘲讽和嘴炮那几句，不会每句都念。</div>';
+    } else {
+      html += '<div class="note">这个浏览器没有语音合成，AI 语音不可用（不影响其它功能）。</div>';
+    }
     html += '<div class="note">改盲注会重开一局，本场手数与筹码保留。大盲不能小于小盲。</div>';
     html += '<div class="actions">' +
       '<button class="btn fold" id="btnCancelSet">取消</button>' +
@@ -4991,6 +5172,11 @@ window.GTO_TABLE = {
     });
     $('setMusic').onchange = function () { Sound.setMusic(this.checked); };
     $('setMusicVol').oninput = function () { Sound.setMusicVol(this.value / 100); };
+    if ($('setVoice')) $('setVoice').onchange = function () { Voice.setOn(this.checked); };
+    if ($('setVoiceRate')) $('setVoiceRate').oninput = function () {
+      Voice.setRate(this.value);
+      $('setVoiceRateVal').textContent = Voice.getRate().toFixed(2) + 'x';
+    };
     $('setSfx').onchange = function () { Sound.setSfx(this.checked); };
     $('setSfxVol').oninput = function () { Sound.setSfxVol(this.value / 100); };
     $('btnCancelSet').onclick = closeModal;
@@ -5074,11 +5260,14 @@ window.GTO_TABLE = {
   function renderChallengeStatus() {
     var el = $('chStatus');
     if (!el) return;
+    var btn = $('btnChallenge');
     if (challenge && challenge.active) {
       el.style.display = '';
       el.innerHTML = '<b>' + challengeStatusText() + '</b>';
+      if (btn) btn.classList.remove('pulse');
     } else {
       el.style.display = 'none';
+      if (btn) btn.classList.add('pulse');
     }
   }
 
