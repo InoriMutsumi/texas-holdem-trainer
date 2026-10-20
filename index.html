@@ -2993,6 +2993,53 @@ window.GTO_TABLE = {
     return chenScore(a, b, hole[0].s === hole[1].s);
   }
 
+  // 手牌分类：翻后这手牌属于「价值 / 中等 / 听牌 / 空气」。
+  // 光看胜率不够——45% 的一对 J 该控池便宜摊牌，45% 的听同花该半诈唬或博赔率，
+  // 打法完全相反。缺了「中等牌过牌」这一格，WTSD 就永远上不去。
+  function handClass(hole, board) {
+    if (!board || board.length < 3) return 'air';
+    var all = hole.concat(board);
+    var cat = E.eval7(all)[0];          // 2 及以上 = 两对/三条/顺子/同花…
+    if (cat >= 2) return 'value';
+    var suitCount = {}, rankSeen = {}, i;
+    for (i = 0; i < all.length; i++) {
+      suitCount[all[i].s] = (suitCount[all[i].s] || 0) + 1;
+      rankSeen[all[i].r] = 1;
+    }
+    var flushDraw = false, k;
+    for (k in suitCount) if (suitCount[k] === 4) flushDraw = true;
+    var ranks = [];
+    for (i = 2; i <= 14; i++) if (rankSeen[i]) ranks.push(i);
+    if (rankSeen[14]) ranks.unshift(1);          // A 当 1 用，A2345 也算听顺
+    var straightDraw = false;
+    for (i = 0; i + 3 < ranks.length; i++) {
+      if (ranks[i + 3] - ranks[i] <= 4) { straightDraw = true; break; }
+    }
+    if (flushDraw || straightDraw) return 'draw';
+    if (cat === 1) return 'medium';               // 一对
+    return 'air';
+  }
+
+  // 牌面结构：干燥面（A72 彩虹）适合高频率开火，湿润面（T98 两同花）要收敛。
+  function boardTexture(board) {
+    if (!board || board.length < 3) return 'dry';
+    var suits = {}, rankSeen = {}, i, k;
+    for (i = 0; i < board.length; i++) {
+      suits[board[i].s] = (suits[board[i].s] || 0) + 1;
+      rankSeen[board[i].r] = 1;
+    }
+    var maxSuit = 0;
+    for (k in suits) if (suits[k] > maxSuit) maxSuit = suits[k];
+    var rs = [];
+    for (i = 2; i <= 14; i++) if (rankSeen[i]) rs.push(i);
+    var connected = 0;
+    for (i = 0; i + 1 < rs.length; i++) if (rs[i + 1] - rs[i] <= 2) connected++;
+    if (maxSuit >= 3) return 'wet';
+    if (maxSuit === 2 && connected >= 2) return 'wet';
+    if (connected >= 2) return 'wet';
+    return 'dry';
+  }
+
   function aiDecide(g, seat) {
     var p = g.players[seat];
     var cfg = AI_PROFILE[(_seatLevel[seat] || g.aiLevel)] || AI_PROFILE.normal;
@@ -3128,6 +3175,10 @@ window.GTO_TABLE = {
     var exploit = cfg.elite ? exploitOf(0) : null;   // 只针对真人座位做剥削
     _lastEq = eq;
 
+    // 手牌分类 + 牌面结构：决定「怎么打」，而不只是「打不打」
+    var hclass = handClass(p.hole, g.board);
+    var texture = boardTexture(g.board);
+
     // 风格改变弃牌线：跟注站 callMul 大 → 弃牌线低；紧弱 callMul 小 → 容易弃
     var minEq = cfg.noOdds
       ? (0.34 + (nOpp - 1) * 0.05) / Math.max(0.5, style.callMul)
@@ -3152,6 +3203,11 @@ window.GTO_TABLE = {
       else if (mdf >= 0.33) minEq = Math.min(minEq, potOdds + 0.07);
       if (cfg.pro && g.street === 'river') minEq = Math.min(minEq, Math.max(potOdds + 0.02, 0.30));
     }
+
+    // 听牌有隐含赔率（后面还能赢更多），门槛可以比已成牌低一点；
+    // 一对则相反，被压制时跟注要更小心
+    if (hclass === 'draw') minEq -= 0.035;
+    else if (hclass === 'medium') minEq += 0.01;
 
     if (cfg.scare && toCall > g.pot * 0.30 && eq < cfg.scare) return { type: 'fold' };
     if (toCall > 0 && eq < minEq) {
@@ -3184,7 +3240,7 @@ window.GTO_TABLE = {
     if (read.loose > 0) raiseLine -= 0.04;      // 对面会用弱牌跟，价值打薄一点也能收钱
     if (read.tight > 0) raiseLine += 0.02;      // 紧手只会用强牌接，别自己往枪口上撞
     if (exploit && exploit.value > 1) raiseLine -= 0.02;   // 你爱跟注 → 价值放宽
-    if (eq > raiseLine && canRaise) {
+    if (eq > raiseLine && canRaise && hclass !== 'medium') {
       // 本街已经打到很大时（有人加过注），中等牌只跟不顶，免得加注战无限升级
       if (toCall > g.pot * 0.75 && eq < 0.88) return { type: 'call' };
       var raiseProb = eq > 0.78 ? 0.82 : 0.55;
@@ -3198,11 +3254,18 @@ window.GTO_TABLE = {
       if (Math.random() < 0.38) return raiseTo(betSize(0.33));
     }
     if (toCall > 0) return { type: 'call' };
+
+    // ===== 无人下注：按手牌类别决定「打还是过」=====
+    // 这一层是 WTSD 的关键：中等牌主动过牌控池，才有后面的摊牌。
+    if (hclass === 'medium' && Math.random() < 0.55) return { type: 'check' };
+    if (hclass === 'draw' && canRaise && Math.random() < 0.38) return raiseTo(betSize(0.55));
+
     // 无人下注：翻前最后加注者做持续下注（C-bet），其他人少量偷池。
     // 没有这一层，AI 会一路过牌到摊牌，跟真人差距最大。
     var pfList = preflopRaises(g);
     var aggressor = pfList.length > 0 && pfList[pfList.length - 1].playerId === seat;
     var cbet = aggressor ? (nOpp <= 1 ? 0.58 : 0.35) : 0.15;
+    cbet *= texture === 'dry' ? 1.25 : 0.75;   // 干燥面放心连开，湿润面收敛
     cbet *= Math.max(0.35, 1 - read.loose * 0.18);    // 跟注站不弃牌，C-bet 收益低
     if (myMind.tilt > 0.08) cbet += myMind.tilt * 0.15;
     if (cfg.elite) {
