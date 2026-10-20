@@ -45,14 +45,15 @@
 
   /* ---------- 顶栏 ---------- */
   .topbar {
-    display: flex; align-items: center; gap: 18px;
+    display: flex; align-items: center; gap: 10px; white-space: nowrap;
     padding: 10px 20px;
     background: rgba(0,0,0,.35);
     border-bottom: 1px solid rgba(255,255,255,.07);
     font-size: 13px;
   }
   .topbar .brand { font-weight: 700; color: var(--gold); letter-spacing: 1px; }
-  .topbar .stat { color: var(--text-dim); }
+  .topbar .stat { color: var(--text-dim); flex-shrink: 0; }
+  .topbar .brand, .topbar .seg, .topbar .btn-mini { flex-shrink: 0; }
   .topbar .stat b { color: var(--text); font-weight: 600; }
   .topbar .spacer { flex: 1; }
   .topbar .btn-mini {
@@ -492,7 +493,7 @@
     .actionbuttons .btn { flex: 1 1 0; min-width: 0; order: 0; }
     .actionbuttons .btn.allin { order: 1; }
     .actionbuttons .raise-panel { flex: 1 1 100%; order: 9; }
-    .btn {
+    .actionbar .btn {
       padding: 13px 4px; font-size: 13px; min-height: 46px;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
@@ -514,7 +515,51 @@
     .modal .replay-line .rp-who { width: 64px; }
     .modal .replay-line .rp-act { font-size: 11px; }
     .modal .guide-tab { padding: 6px 12px; font-size: 12px; }
+    .ch-card { padding: 10px 12px; }
+    .ch-result .ch-act { flex-direction: column; }
   }
+
+  /* ---------------- 挑战模式 ---------------- */
+  .ch-status { color: var(--gold); }
+  .ch-status b { font-weight: 600; }
+  .ch-card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 10px 0; display: flex; flex-direction: column; gap: 4px; }
+  .ch-card .ch-name { font-size: 16px; font-weight: 700; color: var(--gold); }
+  .ch-card .ch-desc { font-size: 13px; color: var(--text-dim); }
+  .ch-card .ch-best { font-size: 12px; color: var(--accent); }
+  .ch-card .ch-go { align-self: flex-end; margin-top: 6px; white-space: nowrap; }
+  .ch-card .ch-go, .ch-result .btn { white-space: nowrap; }
+  .ch-result { border-radius: 10px; padding: 14px; margin: 12px 0; text-align: center; }
+  .ch-result.win { background: rgba(212,175,55,.12); border: 1px solid var(--gold); }
+  .ch-result.lose { background: rgba(200,60,60,.10); border: 1px solid var(--lose); }
+  .ch-result .ch-title { font-size: 20px; font-weight: 800; margin-bottom: 4px; }
+  .ch-result.win .ch-title { color: var(--gold); }
+  .ch-result.lose .ch-title { color: var(--lose); }
+  .ch-result .ch-sub { font-size: 13px; color: var(--text-dim); margin: 2px 0; }
+  .ch-result .ch-act { margin-top: 12px; display: flex; gap: 10px; justify-content: center; }
+
+  /* 大赢庆祝 */
+  .big-win {
+    position: fixed; left: 50%; top: 42%; transform: translate(-50%, -50%);
+    font-size: 64px; font-weight: 900; color: var(--gold);
+    text-shadow: 0 4px 28px rgba(0,0,0,.65);
+    pointer-events: none; z-index: 9999;
+    animation: bigWin 1.5s cubic-bezier(.2,.9,.3,1.2) both;
+  }
+  @keyframes bigWin {
+    0%   { opacity: 0; transform: translate(-50%, -30%) scale(.6); }
+    20%  { opacity: 1; transform: translate(-50%, -50%) scale(1.12); }
+    35%  { transform: translate(-50%, -50%) scale(1); }
+    80%  { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -92%) scale(.92); }
+  }
+  @keyframes shake {
+    0%,100% { transform: translate(0,0); }
+    20% { transform: translate(-4px, 2px); }
+    40% { transform: translate(5px, -3px); }
+    60% { transform: translate(-3px, 1px); }
+    80% { transform: translate(2px, -1px); }
+  }
+  body.shake { animation: shake .38s ease-in-out; }
 
   /* 手机横屏：只求能玩，不求精致 */
   @media (max-width: 899px) and (orientation: landscape) and (max-height: 500px) {
@@ -550,8 +595,9 @@
     </div>
     <span class="stat">盲注 <b id="topBlinds">10 / 20</b></span>
     <span class="stat">筹码 <b id="topChips">2000</b></span>
-    <span class="stat">本场手数 <b id="topHands">0</b></span>
-    <span class="stat">补码 <b id="topRebuys">0</b> 次</span>
+    <span class="stat">手数 <b id="topHands">0</b></span>
+    <span class="stat">补码 <b id="topRebuys">0</b></span>
+    <span class="stat ch-status" id="chStatus" style="display:none"></span>
     <label class="stat ai-level">AI <select id="aiLevelSel">
       <option value="easy">新手</option>
       <option value="normal">熟练</option>
@@ -561,6 +607,7 @@
     <span class="spacer"></span>
     <button class="btn-mini desktop-only" id="btnGto">GTO 表</button>
     <button class="btn-mini desktop-only" id="btnGuide">规则</button>
+    <button class="btn-mini desktop-only" id="btnChallenge" title="挑战模式">🏆</button>
     <button class="btn-mini desktop-only" id="btnSound" title="背景音乐开关">🔊 声音</button>
     <button class="btn-mini desktop-only" id="btnSettings">设置</button>
     <button class="btn-mini desktop-only" id="btnStats">统计</button>
@@ -1198,6 +1245,7 @@ window.GTO_TABLE = {
       result: null,
       handOver: true,
       aiLevel: opts.aiLevel || 'normal',
+      autoRebuy: opts.autoRebuy !== false,
       handsPlayed: 0,
       rebuys: 0,
       log: []
@@ -1757,8 +1805,8 @@ window.GTO_TABLE = {
       guard++;
     }
     g.buttonSeat = next;
-    // 自动补码
-    g.players.forEach(function (p) {
+    // 自动补码（挑战模式下关闭：输光就是输光）
+    if (g.autoRebuy !== false) g.players.forEach(function (p) {
       if (p.chips <= 0) {
         p.chips = g.buyIn;
         g.rebuys++;
@@ -2057,6 +2105,7 @@ window.GTO_TABLE = {
       bigBlind: s.blinds.bb,
       buyIn: s.blinds.bb * 100,
       aiLevel: s.aiLevel,
+      autoRebuy: !(challenge && challenge.active),
       humanSeat: 0,
       seed: (Date.now() % 2147483647)
     });
@@ -2376,6 +2425,7 @@ window.GTO_TABLE = {
     $('topChips').textContent = me.chips;
     $('topHands').textContent = game.handsPlayed;
     $('topRebuys').textContent = game.rebuys;
+    renderChallengeStatus();
     $('topBlinds').textContent = game.smallBlind + ' / ' + game.bigBlind;
 
     // 座位
@@ -2443,6 +2493,11 @@ window.GTO_TABLE = {
     $('oddsHint').textContent = '';
 
     if (game.handOver) {
+      if (challenge && challenge.result) {
+        $('actionHint').textContent = '挑战已结束';
+        box.appendChild(mkBtn('查看结果', 'raise', function () { showResult(); }, false));
+        return;
+      }
       $('actionHint').textContent = '这一手结束了';
       box.appendChild(mkBtn('下一手', 'raise', function () { nextHand(); }));
       return;
@@ -3597,6 +3652,7 @@ window.GTO_TABLE = {
     updateMind(game);
     saveHand();
     saveSettings({ chips: game.players[0].chips, hands: game.handsPlayed, rebuys: game.rebuys });
+    checkChallenge();
     showResult();
   }
 
@@ -3890,12 +3946,27 @@ window.GTO_TABLE = {
     return out;
   }
 
+  // 大赢庆祝：30BB 或半仓以上才触发，免得每手都炸
+  function celebrateBigWin(amount) {
+    var bb = (game && game.bigBlind) || 20;
+    var chips = game ? game.players[0].chips : 0;
+    var big = amount >= bb * 30 || amount >= chips * 0.5 || amount >= 1000;
+    if (!big) return;
+    var el = document.createElement('div');
+    el.className = 'big-win';
+    el.textContent = '+' + amount;
+    document.body.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 1600);
+    document.body.classList.add('shake');
+    setTimeout(function () { document.body.classList.remove('shake'); }, 420);
+  }
+
   function showResult() {
     var me = game.players[0];
     var r = game.result;
     var won = 0;
     if (r && r.winners) r.winners.forEach(function (w) { if (w.playerId === 0) won += w.amount; });
-    if (won > 0) Sound.play('win');
+    if (won > 0) { Sound.play('win'); celebrateBigWin(won); }
     else if (!me.folded) Sound.play('lose');
     var html = '<h3>本手结算</h3>';
     html += '<div class="row"><span>公共牌</span><span>' +
@@ -3932,10 +4003,16 @@ window.GTO_TABLE = {
       html += '<div class="note">这一手你没有做决策（直接弃牌或没轮到）。</div>';
     }
 
-    html += '<div class="note">牌谱已记录。点「下一手」继续。</div>';
-    html += '<div class="actions"><button class="btn raise" id="btnNextHand">下一手</button></div>';
+    if (challenge && challenge.result) {
+      html += challengeResultHtml();
+    } else {
+      html += '<div class="note">牌谱已记录。点「下一手」继续。</div>';
+      html += '<div class="actions"><button class="btn raise" id="btnNextHand">下一手</button></div>';
+    }
     openModal(html);
-    $('btnNextHand').onclick = function () { closeModal(); nextHand(); };
+    if ($('btnNextHand')) $('btnNextHand').onclick = function () { closeModal(); nextHand(); };
+    if ($('btnChAgain')) $('btnChAgain').onclick = function () { startChallenge(challenge.mode); };
+    if ($('btnChQuit')) $('btnChQuit').onclick = quitChallenge;
   }
 
   // ---------------- 新手教学 ----------------
@@ -4574,6 +4651,138 @@ window.GTO_TABLE = {
     document.body.setAttribute('data-theme', name || 'green');
   }
 
+  // ---------------- 挑战模式 ----------------
+  var CHALLENGE_MODES = {
+    survival: { name: '生存', hands: 100, start: 2000, target: null, desc: '100 手内不破产，撑到最后算通关' },
+    sprint:   { name: '冲刺', hands: 30,  start: 2000, target: 3000, desc: '30 手内从 2000 打到 3000' },
+    double:   { name: '翻倍', hands: 50,  start: 2000, target: 4000, desc: '50 手内从 2000 翻到 4000' }
+  };
+
+  var challenge = null;
+
+  function loadChallengeBest() {
+    var b = LS.get('poker.challenge.v1', null);
+    return (b && typeof b === 'object') ? b : {};
+  }
+
+  function saveChallengeBest(b) {
+    LS.set('poker.challenge.v1', b || {});
+  }
+
+  function startChallenge(mode) {
+    var cfg = CHALLENGE_MODES[mode];
+    if (!cfg) return;
+    challenge = {
+      active: true, mode: mode,
+      startChips: cfg.start, targetChips: cfg.target,
+      handsTotal: cfg.hands, handsLeft: cfg.hands,
+      maxChips: cfg.start, result: null, startedAt: Date.now()
+    };
+    var st = loadSettings();
+    st.chips = cfg.start;
+    st.hands = 0;
+    st.rebuys = 0;
+    saveSettings(st);
+    closeModal();
+    newGame();
+  }
+
+  function quitChallenge() {
+    challenge = null;
+    closeModal();
+    newGame();
+  }
+
+  function challengeStatusText() {
+    if (!challenge || !challenge.active) return '';
+    var cfg = CHALLENGE_MODES[challenge.mode];
+    var chips = game ? game.players[0].chips : challenge.startChips;
+    var left = cfg.name + ' · ' + (challenge.handsTotal - challenge.handsLeft) + '/' + challenge.handsTotal + ' 手';
+    if (challenge.targetChips) left += ' · ' + chips + '/' + challenge.targetChips;
+    else left += ' · 筹码 ' + chips;
+    return left;
+  }
+
+  function renderChallengeStatus() {
+    var el = $('chStatus');
+    if (!el) return;
+    if (challenge && challenge.active) {
+      el.style.display = '';
+      el.innerHTML = '<b>' + challengeStatusText() + '</b>';
+    } else {
+      el.style.display = 'none';
+    }
+  }
+
+  // 一手结束后调用：先看筹码，再看手数
+  function checkChallenge() {
+    if (!challenge || !challenge.active || !game) return;
+    var chips = game.players[0].chips;
+    if (chips > challenge.maxChips) challenge.maxChips = chips;
+    challenge.handsLeft = Math.max(0, challenge.handsLeft - 1);
+    var cfg = CHALLENGE_MODES[challenge.mode];
+    if (chips <= 0) return finishChallenge('lose');
+    if (challenge.targetChips && chips >= challenge.targetChips) return finishChallenge('win');
+    if (challenge.handsLeft <= 0) {
+      return finishChallenge(challenge.targetChips ? 'lose' : 'win');
+    }
+  }
+
+  function finishChallenge(result) {
+    challenge.active = false;
+    challenge.result = result;
+    var best = loadChallengeBest();
+    var m = challenge.mode;
+    var used = challenge.handsTotal - challenge.handsLeft;
+    if (result === 'win') {
+      if (m === 'survival') best.survival = Math.max(best.survival || 0, used);
+      else if (best[m] === undefined || used < best[m]) best[m] = used;
+    }
+    saveChallengeBest(best);
+    if (typeof renderActions === 'function') renderActions();
+  }
+
+  function challengeResultHtml() {
+    if (!challenge || !challenge.result) return '';
+    var win = challenge.result === 'win';
+    var cfg = CHALLENGE_MODES[challenge.mode];
+    var used = challenge.handsTotal - challenge.handsLeft;
+    var html = '<div class="ch-result ' + (win ? 'win' : 'lose') + '">';
+    html += '<div class="ch-title">' + (win ? '🏆 通关' : '💸 挑战失败') + '</div>';
+    html += '<div class="ch-sub">' + cfg.name + '模式 · 用了 ' + used + ' 手 · 最高筹码 ' + challenge.maxChips + '</div>';
+    if (!win) {
+      if (challenge.maxChips < 1) html += '<div class="ch-sub">筹码打光了。下次记得：能弃的牌就弃，别硬跟。</div>';
+      else html += '<div class="ch-sub">差 ' + Math.max(0, (challenge.targetChips || 0) - challenge.maxChips) + ' 个筹码。</div>';
+    }
+    html += '<div class="ch-act"><button class="btn check" id="btnChAgain">再来一次</button>' +
+      '<button class="btn fold" id="btnChQuit">退出挑战</button></div></div>';
+    return html;
+  }
+
+  function showChallenge() {
+    var best = loadChallengeBest();
+    var html = '<h3>挑战模式</h3>';
+    html += '<div class="note">挑战中<b>不能补码</b>：输光就是输光。失败后筹码清零，要重新开挑战。</div>';
+    Object.keys(CHALLENGE_MODES).forEach(function (k) {
+      var c = CHALLENGE_MODES[k];
+      var rec = best[k];
+      var recTxt = '';
+      if (k === 'survival' && rec) recTxt = '最好：撑过 ' + rec + ' 手';
+      else if (rec !== undefined && rec !== null) recTxt = '最好：' + rec + ' 手通关';
+      html += '<div class="ch-card" data-mode="' + k + '">' +
+        '<div class="ch-name">' + c.name + '</div>' +
+        '<div class="ch-desc">' + c.desc + '</div>' +
+        (recTxt ? '<div class="ch-best">' + recTxt + '</div>' : '') +
+        '<button class="btn raise ch-go" data-mode="' + k + '">开始</button></div>';
+    });
+    html += '<div class="actions"><button class="btn fold" id="btnChClose">关闭</button></div>';
+    openModal(html);
+    $('btnChClose').onclick = closeModal;
+    Array.prototype.forEach.call(document.querySelectorAll('.ch-go'), function (b) {
+      b.onclick = function () { startChallenge(b.getAttribute('data-mode')); };
+    });
+  }
+
   function switchTable(mode) {
     var s = loadSettings();
     if (game) {
@@ -4632,6 +4841,8 @@ window.GTO_TABLE = {
     if (!b) return;
     b.textContent = Sound.get().musicOn ? '🔊 声音' : '🔇 静音';
   }
+  $('btnChallenge').onclick = function () { showChallenge(); };
+
   $('btnSound').onclick = function () {
     Sound.unlock();
     Sound.setMusic(!Sound.get().musicOn);
@@ -4789,6 +5000,8 @@ window.GTO_TABLE = {
 
   // 调试：?settings=1 直接打开设置弹层（截图与自查用）
   if (/[?&]settings=1/.test(location.search)) setTimeout(showSettings, 300);
+  var _chDbg = String(location.search || '').match(/[?&]challenge=(1|survival|sprint|double)/);
+  if (_chDbg) setTimeout(function () { _chDbg[1] === '1' ? showChallenge() : startChallenge(_chDbg[1]); }, 300);
 })();
 </script>
 </body>
